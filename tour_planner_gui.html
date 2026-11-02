@@ -1,0 +1,2315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batu Tour Planner — Asisten Pintar Rute & Jadwal Wisata Kota Batu</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    #map { height: 100%; min-height: 420px; border-radius: 1rem; z-index: 10; }
+    .leaflet-popup-content-wrapper { background: #ffffff; color: #0f172a; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: none; }
+    
+    /* VOUCHER ELEGAN KHUSUS CETAK / SIMPAN PDF */
+    #printVoucherContainer {
+      display: none;
+    }
+
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm 12mm;
+      }
+      body {
+        background: white !important;
+        color: #0f172a !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      /* Sembunyikan semua elemen web */
+      header, .stepper-nav, #step1, #step2, #step3, .no-print, #aiExplainerModal {
+        display: none !important;
+      }
+      /* Tampilkan hanya voucher resmi berformat rapi */
+      #printVoucherContainer {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .page-break {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-sky-500 selection:text-white">
+
+  <!-- ======================================================================= -->
+  <!-- VOUCHER RESMI KHUSUS PRINT / DOWNLOAD PDF (HANYA MUNCUL SAAT CETAK / PDF) -->
+  <!-- ======================================================================= -->
+  <div id="printVoucherContainer" class="p-6 max-w-4xl mx-auto bg-white">
+    <!-- Header Voucher Elegan -->
+    <div class="border-b-2 border-slate-900 pb-4 mb-4 flex items-center justify-between">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center text-2xl font-black">
+          <i class="fa-solid fa-map-location-dot"></i>
+        </div>
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-widest text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+            Official Travel Voucher & Itinerary
+          </span>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight mt-0.5">Jadwal Perjalanan Wisata Kota Batu</h1>
+          <p class="text-xs text-slate-500">Disusun Otomatis Menggunakan Algoritma STRIPS Planning &bull; Kelompok 8 AI Kelas A</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="inline-block px-3 py-1 rounded-lg bg-slate-100 border border-slate-300 font-mono text-xs font-bold text-slate-800" id="printDocCode">
+          #TRIP-BATU-2026-K8
+        </div>
+        <div class="text-[11px] text-slate-500 mt-1">Dicetak: <span id="printDateStr">-</span></div>
+      </div>
+    </div>
+
+    <!-- Informasi Profil Turis & Parameter Liburan Lengkap -->
+    <div class="grid grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 mb-4 text-xs">
+      <div>
+        <span class="text-[10px] text-slate-400 font-bold uppercase block">Tanggal & Hari</span>
+        <strong class="text-slate-900 text-sm" id="pvDateDay">-</strong>
+        <span class="text-[10px] font-bold text-sky-600 block mt-0.5" id="pvDayBadge">-</span>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 font-bold uppercase block">Titik & Kendaraan</span>
+        <strong class="text-slate-900 text-sm" id="pvStartLoc">-</strong>
+        <span class="text-[10px] text-slate-500 block mt-0.5" id="pvVehicleText">-</span>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 font-bold uppercase block">Rentang Waktu</span>
+        <strong class="text-slate-900 text-sm" id="pvTimeRange">-</strong>
+        <span class="text-[10px] text-slate-500 block mt-0.5" id="pvDurationText">Durasi Perjalanan</span>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 font-bold uppercase block">Total Pengeluaran</span>
+        <strong class="text-emerald-700 text-sm font-mono" id="pvTotalCost">Rp 0</strong>
+        <span class="text-[10px] text-slate-500 block mt-0.5" id="pvCostBreakdown">Tiket + Makan + Parkir</span>
+      </div>
+    </div>
+
+    <!-- Tabel Jadwal Bersih & Terstruktur -->
+    <div class="mb-4">
+      <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+        <i class="fa-solid fa-clock text-sky-600"></i> Rencana Kegiatan Jam Demi Jam
+      </h3>
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="border-b-2 border-slate-300 text-slate-500 font-bold text-[10px] uppercase tracking-wider bg-slate-100/70">
+            <th class="py-2.5 px-3 w-10 text-center">No</th>
+            <th class="py-2.5 px-3 w-28">Waktu (WIB)</th>
+            <th class="py-2.5 px-3">Kegiatan & Destinasi</th>
+            <th class="py-2.5 px-3 w-28 text-right">Biaya / Pos</th>
+            <th class="py-2.5 px-3">Alasan AI & Tips Wisatawan</th>
+          </tr>
+        </thead>
+        <tbody id="printTableBody" class="divide-y divide-slate-200">
+          <!-- Injected via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Rincian Biaya Transparan -->
+    <div class="grid grid-cols-3 gap-3 p-3 rounded-xl bg-slate-100 border border-slate-200 mb-4 text-xs page-break">
+      <div>
+        <span class="text-[10px] text-slate-500 font-bold uppercase block">Subtotal Tiket Masuk</span>
+        <strong class="text-slate-900 font-mono text-sm" id="pvSubTicket">Rp 0</strong>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-500 font-bold uppercase block">Subtotal Kuliner & Makan</span>
+        <strong class="text-slate-900 font-mono text-sm" id="pvSubMeal">Rp 0</strong>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-500 font-bold uppercase block">Subtotal Parkir Kendaraan</span>
+        <strong class="text-slate-900 font-mono text-sm" id="pvSubPark">Rp 0</strong>
+      </div>
+    </div>
+
+    <!-- Kotak Panduan & Tips Lokal Wisata Batu -->
+    <div class="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 mb-4 text-xs text-sky-950 space-y-1 page-break">
+      <div class="font-bold flex items-center gap-1.5 text-sky-900">
+        <i class="fa-solid fa-circle-info text-sky-600"></i>
+        <span>Tips Praktis Menikmati Kota Batu:</span>
+      </div>
+      <ul class="list-disc list-inside space-y-0.5 text-slate-700 text-[11px] leading-relaxed">
+        <li><strong>Suhu Udara:</strong> Udara Kota Batu berkisar antara 16°C – 22°C. Disarankan membawa jaket atau pakaian hangat terutama saat sore dan malam hari.</li>
+        <li><strong>Paralayang Banyak:</strong> Waktu tercantik adalah sore hari menjelang matahari terbenam (golden hour) untuk mendapatkan panorama lampu kota yang memukau tanpa terik panas matahari siang.</li>
+        <li><strong>Alun-Alun Kota Batu:</strong> Pusat kuliner legendaris (seperti Pos Ketan Legenda 1967 dan bianglala) paling nikmat dan hidup saat senja hingga malam hari.</li>
+        <li><strong>Navigasi:</strong> Rute dapat dibuka langsung di aplikasi Google Maps untuk memandu navigasi langsung di jalan.</li>
+      </ul>
+    </div>
+
+    <!-- Footer Voucher Resmi / Tanda Tangan -->
+    <div class="border-t border-slate-300 pt-3 flex items-center justify-between text-[11px] text-slate-500">
+      <div>
+        <p class="font-bold text-slate-800">Sistem Perencanaan Otomatis Rute & Jadwal Wisata Kota Batu</p>
+        <p>Proyek UTS AI (Kelas A) &bull; Dosen Pengampu: Hani Nurhayati, M.T.</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Kelompok 8: Mutiara Putri Faradilla (240605110113) & Vanya Nyssa Maulida (240605110104)</p>
+      </div>
+      <div class="text-right">
+        <div class="w-24 h-9 border border-dashed border-slate-400 rounded flex items-center justify-center font-mono text-[9px] text-slate-400 mx-auto mb-1">
+          [ STAMP VALID ]
+        </div>
+        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+          STATUS: TERVERIFIKASI
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- APLIKASI WEB INTERAKTIF (TAMPILAN NORMAL DI BROWSER) -->
+  <!-- ======================================================================= -->
+  <!-- TOP HEADER (BERSIH & FOKUS) -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4 shadow-sm no-print">
+    <div class="max-w-5xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
+          <i class="fa-solid fa-map-location-dot text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-extrabold text-slate-900 text-base md:text-lg tracking-tight">Rencana Wisata Kota Batu</h1>
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-700 border border-sky-200">
+              AI Planning
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">Proyek UTS AI (Kelas A) &bull; Kelompok 8: Mutiara Putri (240605110113) & Vanya Nyssa (240605110104)</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- STEPPER PROGRESS BAR (INDIKATOR LANGKAH) -->
+  <div class="bg-white border-b border-slate-200 py-3.5 px-4 stepper-nav no-print">
+    <div class="max-w-xl mx-auto flex items-center justify-between relative">
+      <div class="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-slate-200 -z-0"></div>
+      
+      <!-- Step 1 Indicator -->
+      <div id="stepIndicator1" class="relative z-10 flex items-center gap-2 bg-white px-2">
+        <span class="w-8 h-8 rounded-full bg-sky-600 text-white font-bold text-xs flex items-center justify-center shadow-md shadow-sky-500/30">1</span>
+        <span class="text-xs font-bold text-sky-900 hidden sm:inline">Titik & Tanggal</span>
+      </div>
+
+      <!-- Step 2 Indicator -->
+      <div id="stepIndicator2" class="relative z-10 flex items-center gap-2 bg-white px-2">
+        <span class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">2</span>
+        <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Pilih Tempat</span>
+      </div>
+
+      <!-- Step 3 Indicator -->
+      <div id="stepIndicator3" class="relative z-10 flex items-center gap-2 bg-white px-2">
+        <span class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">3</span>
+        <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Jadwal Jadi</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 no-print">
+
+    <!-- ===================================================================== -->
+    <!-- LANGKAH 1: KONDISI AWAL (INITIAL STATE) LENGKAP -->
+    <!-- ===================================================================== -->
+    <section id="step1" class="space-y-6">
+      <div class="text-center max-w-lg mx-auto pt-2 pb-2">
+        <span class="text-xs font-bold text-sky-600 uppercase tracking-wider bg-sky-50 px-3 py-1 rounded-full border border-sky-100">Langkah 1 dari 3</span>
+        <h2 class="text-2xl font-extrabold text-slate-900 mt-2">Rencanakan Perjalananmu</h2>
+        <p class="text-sm text-slate-500 mt-1">Pilih tanggal liburan, kendaraan, jam, dan anggaran bebas sesuai rencana kamu.</p>
+      </div>
+
+      <!-- Grid Formulir Pengaturan -->
+      <div class="max-w-3xl mx-auto space-y-4">
+        
+        <!-- Baris 1: Tanggal Liburan & Deteksi Tarif Weekday/Weekend -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <i class="fa-solid fa-calendar-day text-sky-600"></i>
+              Tanggal Liburan & Tarif Tiket
+            </h3>
+            <span id="dayTypeBadge" class="text-xs font-bold px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+              📅 Weekday (Senin-Jumat) - Tarif Reguler
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Tanggal Rencana Wisata</label>
+              <input type="date" id="visitDateInput" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-sky-600" onchange="onDateChanged()">
+              <span class="text-[11px] text-slate-400 mt-1 block" id="dateFriendlyLabel">-</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+              <div class="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                <i class="fa-solid fa-tag text-amber-500"></i>
+                <span>Sistem Tarif Tiket Masuk Batu:</span>
+              </div>
+              <p>Harga tiket wisata otomatis disesuaikan dengan kalender: akhir pekan (Sabtu-Minggu) memiliki tarif libur/weekend, sedangkan hari kerja (Senin-Jumat) berlaku tarif hemat.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Baris 2: Titik Awal & Kendaraan -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Titik Keberangkatan -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+            <h3 class="font-bold text-slate-900 text-sm pb-2 border-b border-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-location-dot text-indigo-600"></i>
+              Titik Keberangkatan
+            </h3>
+            <div class="space-y-2.5">
+              <label class="cursor-pointer block">
+                <input type="radio" name="startLocation" value="Hotel_Batu" checked class="peer sr-only">
+                <div class="p-3.5 rounded-xl border-2 border-slate-200 peer-checked:border-sky-600 peer-checked:bg-sky-50/40 transition flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm flex-shrink-0">
+                    <i class="fa-solid fa-hotel"></i>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-slate-900 text-xs">Hotel di Kota Batu</h4>
+                    <p class="text-[11px] text-slate-500">Sudah menginap di pusat Kota Batu</p>
+                  </div>
+                </div>
+              </label>
+
+              <label class="cursor-pointer block">
+                <input type="radio" name="startLocation" value="Stasiun_Malang" class="peer sr-only">
+                <div class="p-3.5 rounded-xl border-2 border-slate-200 peer-checked:border-sky-600 peer-checked:bg-sky-50/40 transition flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center text-sm flex-shrink-0">
+                    <i class="fa-solid fa-train"></i>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-slate-900 text-xs">Stasiun Kota Malang</h4>
+                    <p class="text-[11px] text-slate-500">Baru tiba dari luar kota via kereta api</p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Pilihan Kendaraan & Parkir -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+            <h3 class="font-bold text-slate-900 text-sm pb-2 border-b border-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-car-side text-emerald-600"></i>
+              Moda Kendaraan & Parkir
+            </h3>
+            <div class="space-y-2.5">
+              <label class="cursor-pointer block">
+                <input type="radio" name="vehicleType" value="motor" checked class="peer sr-only">
+                <div class="p-3.5 rounded-xl border-2 border-slate-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50/40 transition flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm flex-shrink-0">
+                    <i class="fa-solid fa-motorcycle"></i>
+                  </div>
+                  <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                      <h4 class="font-bold text-slate-900 text-xs">Sepeda Motor</h4>
+                      <span class="text-[10px] font-mono font-bold text-emerald-700">Parkir Rp 4.000</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">Lincah, bebas macet akhir pekan di jalur Batu</p>
+                  </div>
+                </div>
+              </label>
+
+              <label class="cursor-pointer block">
+                <input type="radio" name="vehicleType" value="mobil" class="peer sr-only">
+                <div class="p-3.5 rounded-xl border-2 border-slate-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50/40 transition flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-teal-100 text-teal-600 flex items-center justify-center text-sm flex-shrink-0">
+                    <i class="fa-solid fa-car"></i>
+                  </div>
+                  <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                      <h4 class="font-bold text-slate-900 text-xs">Mobil Pribadi / Keluarga</h4>
+                      <span class="text-[10px] font-mono font-bold text-teal-700">Parkir Rp 10.000</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">Nyaman sekeluarga, ada estimasi macet weekend</p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Baris 3: Jam Berangkat/Pulang & Anggaran Bebas (Custom) -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <h3 class="font-bold text-slate-900 text-sm pb-2 border-b border-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-clock text-sky-600"></i>
+            Waktu Kunjungan & Anggaran Uang Saku
+          </h3>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Jam Mulai -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1.5">Jam Mulai Berangkat</label>
+              <input type="time" id="startTimeInput" value="08:30" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-sky-600">
+              <span class="text-[11px] text-slate-400 mt-1 block">Rekomendasi: 08:30 WIB</span>
+            </div>
+
+            <!-- Jam Pulang -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1.5">Maksimal Pulang Istirahat</label>
+              <input type="time" id="endTimeInput" value="21:30" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-sky-600">
+              <span class="text-[11px] text-slate-400 mt-1 block">Rekomendasi: 21:30 WIB</span>
+            </div>
+          </div>
+
+          <!-- Uang Saku / Budget Bebas Custom -->
+          <div class="pt-3 border-t border-slate-100 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700">Anggaran Uang Saku yang Disiapkan (Bebas Custom)</label>
+              <span id="budgetDisplay" class="text-xs font-bold font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                Belum diisi
+              </span>
+            </div>
+            
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">Rp</span>
+              <input type="number" id="budgetInput" value="" min="0" step="10000" class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-11 pr-4 py-2.5 text-sm font-mono text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-sky-600" oninput="onCustomBudgetInput(this.value)" placeholder="Ketik nominal uang saku kamu (contoh: 500000)">
+            </div>
+
+            <!-- Tombol Bantuan Cepat Nominal Populer (Bisa di-klik atau ketik sendiri di atas) -->
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <span class="text-[11px] text-slate-400 font-medium">Bantuan Cepat:</span>
+              <button type="button" onclick="setBudgetAmount(300000)" class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Rp 300.000</button>
+              <button type="button" onclick="setBudgetAmount(500000)" class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Rp 500.000</button>
+              <button type="button" onclick="setBudgetAmount(750000)" class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Rp 750.000</button>
+              <button type="button" onclick="setBudgetAmount(1000000)" class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Rp 1.000.000</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Tombol Lanjut ke Langkah 2 -->
+      <div class="text-center pt-2">
+        <button onclick="goToStep(2)" class="px-8 py-3.5 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm shadow-lg shadow-sky-600/25 transition transform active:scale-95 inline-flex items-center gap-2">
+          <span>Lanjut Pilih Destinasi Wisata</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- LANGKAH 2: PILIH WISATA DENGAN REKOMENDASI GAYA LIBURAN (1-CLICK) -->
+    <!-- ===================================================================== -->
+    <section id="step2" class="space-y-6 hidden">
+      <div class="text-center max-w-lg mx-auto pt-2 pb-1">
+        <span class="text-xs font-bold text-sky-600 uppercase tracking-wider bg-sky-50 px-3 py-1 rounded-full border border-sky-100">Langkah 2 dari 3</span>
+        <h2 class="text-2xl font-extrabold text-slate-900 mt-2">Mau ke mana saja di Kota Batu?</h2>
+        <p class="text-sm text-slate-500 mt-1">Pilih paket gaya liburan instan atau centang bebas destinasi impianmu!</p>
+      </div>
+
+      <!-- KARTU PRESET GAYA LIBURAN (1-CLICK MOOD PRESETS) -->
+      <div class="max-w-3xl mx-auto bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 rounded-2xl shadow-md space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Rekomendasi 1-Klik Gaya Liburan (Mood Presets)
+          </span>
+          <span class="text-[11px] text-slate-300">Pilih satu untuk centang otomatis</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button type="button" onclick="applyMoodPreset('healing')" class="mood-btn p-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition flex flex-col justify-between">
+            <div>
+              <div class="text-base mb-1">🌿</div>
+              <strong class="text-xs font-bold block text-emerald-300">Alam & Healing</strong>
+              <p class="text-[10px] text-slate-300 mt-0.5">Coban Rondo, Paralayang, Selecta</p>
+            </div>
+            <span class="text-[9px] font-bold text-emerald-400 mt-2">Pilih Paket &rarr;</span>
+          </button>
+
+          <button type="button" onclick="applyMoodPreset('keluarga')" class="mood-btn p-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition flex flex-col justify-between">
+            <div>
+              <div class="text-base mb-1">👨‍👩‍👧</div>
+              <strong class="text-xs font-bold block text-sky-300">Keluarga & Edukasi</strong>
+              <p class="text-[10px] text-slate-300 mt-0.5">Jatim Park 2, Petik Apel, Museum Angkut</p>
+            </div>
+            <span class="text-[9px] font-bold text-sky-400 mt-2">Pilih Paket &rarr;</span>
+          </button>
+
+          <button type="button" onclick="applyMoodPreset('genz')" class="mood-btn p-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition flex flex-col justify-between">
+            <div>
+              <div class="text-base mb-1">📸</div>
+              <strong class="text-xs font-bold block text-pink-300">Gen-Z & Spot Foto</strong>
+              <p class="text-[10px] text-slate-300 mt-0.5">San Terra, Jatim Park 3, Paralayang</p>
+            </div>
+            <span class="text-[9px] font-bold text-pink-400 mt-2">Pilih Paket &rarr;</span>
+          </button>
+
+          <button type="button" onclick="applyMoodPreset('kuliner')" class="mood-btn p-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition flex flex-col justify-between">
+            <div>
+              <div class="text-base mb-1">🌙</div>
+              <strong class="text-xs font-bold block text-amber-300">Kuliner & Santai</strong>
+              <p class="text-[10px] text-slate-300 mt-0.5">Petik Apel, Alun-Alun, BNS Lampion</p>
+            </div>
+            <span class="text-[9px] font-bold text-amber-400 mt-2">Pilih Paket &rarr;</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Status Pilihan & Filter Kategori -->
+      <div class="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-slate-500">Filter:</span>
+          <button onclick="filterAttractions('all')" class="cat-pill px-3 py-1.5 rounded-xl font-bold bg-sky-600 text-white text-xs" data-cat="all">Semua (12)</button>
+          <button onclick="filterAttractions('wahana')" class="cat-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs" data-cat="wahana">Wahana</button>
+          <button onclick="filterAttractions('alam')" class="cat-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs" data-cat="alam">Wisata Alam</button>
+          <button onclick="filterAttractions('santai')" class="cat-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs" data-cat="santai">Kuliner & Suvenir</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 transition-all" id="step2SelectedBadge">
+            0 Destinasi Dipilih
+          </div>
+          <button type="button" onclick="clearAllSelections()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-xl border border-rose-200 transition">
+            <i class="fa-solid fa-rotate-left mr-1"></i>Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid Kartu Tempat Wisata (12 Destinasi Lengkap) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-w-3xl mx-auto" id="attractionsGrid">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Navigasi Langkah -->
+      <div class="flex items-center justify-center gap-3 pt-3">
+        <button onclick="goToStep(1)" class="px-6 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition inline-flex items-center gap-2">
+          <i class="fa-solid fa-arrow-left"></i>
+          <span>Kembali</span>
+        </button>
+        <button onclick="runPlannerAndShowStep3()" class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white font-extrabold text-sm shadow-xl shadow-sky-600/30 transition transform active:scale-95 inline-flex items-center gap-2.5">
+          <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i>
+          <span>Susunkan Jadwal Lengkap (STRIPS AI)</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- LANGKAH 3: HASIL JADWAL, MAKAN SIANG/MALAM, BIAYA, GOOGLE MAPS & PETA -->
+    <!-- ===================================================================== -->
+    <section id="step3" class="space-y-6 hidden">
+      
+      <!-- Banner Selesai / Status -->
+      <div id="step3HeroBanner" class="bg-gradient-to-r from-sky-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg flex flex-wrap items-center justify-between gap-4 transition-all">
+        <div>
+          <span id="step3HeroTag" class="px-3 py-1 rounded-full bg-white/20 text-white font-bold text-[11px] backdrop-blur uppercase tracking-wider">
+            🎉 Jadwal Liburan Selesai Disusun!
+          </span>
+          <h2 id="step3HeroTitle" class="text-xl md:text-2xl font-black mt-2">Rencana Perjalanan Wisata Kota Batu</h2>
+          <p id="step3HeroDesc" class="text-xs text-sky-100 mt-1">Lengkap dengan jeda makan siang & malam, estimasi parkir riil, dan rute navigasi!</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5 no-print">
+          <!-- Tombol Navigasi Google Maps Utama -->
+          <a id="gmapsRouteBtn" href="#" target="_blank" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition flex items-center gap-2">
+            <i class="fa-solid fa-diamond-turn-right text-sm"></i>
+            <span>Buka Rute di Google Maps ↗</span>
+          </a>
+          <button onclick="openAIExplainerModal()" class="px-3.5 py-2.5 rounded-xl bg-white text-sky-800 font-extrabold text-xs shadow hover:bg-sky-50 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-brain text-indigo-600"></i>
+            <span>Kenapa Urutan Ini?</span>
+          </button>
+          <button id="step3PrintBtn" onclick="triggerPrintPDF()" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-md transition flex items-center gap-1.5">
+            <i class="fa-solid fa-download"></i>
+            <span>Cetak / Simpan PDF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ringkasan Biaya Lengkap (Tiket, Makan, Parkir, Sisa Uang Saku) -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Tiket Masuk</div>
+          <div id="resTotalTicket" class="text-lg font-black font-mono text-emerald-600 mt-1">Rp 0</div>
+          <span class="text-[10px] text-slate-400" id="resTicketRateType">Tarif Reguler (Weekday)</span>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Makan & Parkir</div>
+          <div id="resMealPark" class="text-lg font-black font-mono text-amber-600 mt-1">Rp 0</div>
+          <span class="text-[10px] text-slate-400" id="resMealParkSub">Makan + Parkir Motor</span>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Pengeluaran</div>
+          <div id="resGrandTotal" class="text-lg font-black font-mono text-sky-600 mt-1">Rp 0</div>
+          <span class="text-[10px] text-slate-400">Semua kebutuhan liburan</span>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sisa Uang Saku</div>
+          <div id="resRemainingBudget" class="text-lg font-black font-mono text-slate-800 mt-1">Rp 0</div>
+          <span class="text-[10px] text-emerald-600 font-bold" id="resBudgetStatus">Aman terkendali</span>
+        </div>
+      </div>
+
+      <!-- Baris Utama: Jadwal Jam-demi-Jam (Kiri) & Peta Rute (Kanan) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Kolom Kiri: Timeline Jadwal Bersih (7 Cols) -->
+        <div class="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-sky-600"></i>
+                Jadwal Kegiatan Jam Demi Jam
+              </h3>
+              <p class="text-[11px] text-slate-500 mt-0.5">Termasuk jeda makan siang/malam, tiket resmi, & perjalanan</p>
+            </div>
+            <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg" id="stepCountBadge">
+              0 Aksi
+            </span>
+          </div>
+
+          <!-- List Langkah Kegiatan -->
+          <div class="space-y-3.5" id="timelineList">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <!-- Kolom Kanan: Peta Interaktif & Navigasi (5 Cols) -->
+        <div class="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm sticky top-24 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-map text-emerald-600"></i>
+              <h3 class="font-bold text-xs text-slate-900">Peta Rute Urutan Perjalanan</h3>
+            </div>
+            <!-- Tombol Cepat Google Maps di Peta -->
+            <a id="gmapsMapCardBtn" href="#" target="_blank" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5">
+              <i class="fa-solid fa-diamond-turn-right text-xs"></i>
+              <span>Buka di Google Maps ↗</span>
+            </a>
+          </div>
+
+          <div class="relative w-full h-[400px] rounded-xl overflow-hidden border border-slate-200 shadow-inner">
+            <div id="map"></div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1">
+            <div class="font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-signs-post text-sky-600"></i>
+              <span>Petunjuk Navigasi:</span>
+            </div>
+            <p>Klik tombol <strong>"Buka Rute di Google Maps"</strong> untuk langsung mengarahkan rute urutan ini di aplikasi Google Maps HP atau browsermu.</p>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between no-print">
+            <button onclick="goToStep(2)" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5">
+              <i class="fa-solid fa-pen-to-square"></i>
+              <span>Ganti Tempat Wisata</span>
+            </button>
+            <button onclick="goToStep(1)" class="px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 font-bold text-xs transition">
+              Mulai dari Awal
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ======================================================================= -->
+  <!-- MODAL: KENAPA AI MEMILIH URUTAN INI? (PENJELASAN RAMAH & STRIPS FORMAL) -->
+  <!-- ======================================================================= -->
+  <div id="aiExplainerModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-base text-slate-900">Kenapa AI Menyusun Urutan Seperti Ini?</h3>
+            <p class="text-xs text-slate-500">Logika Temporal Heuristic & Precondition STRIPS</p>
+          </div>
+        </div>
+        <button onclick="closeAIExplainerModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold">&times;</button>
+      </div>
+
+      <!-- Penjelasan Santai Manusiawi -->
+      <div class="space-y-3 text-xs text-slate-700 leading-relaxed">
+        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
+          <h4 class="font-bold text-emerald-950 text-sm mb-1">
+            <i class="fa-solid fa-clock text-emerald-600 mr-1"></i> Optimasi Waktu Nyaman & Manusiawi (Temporal & Comfort):
+          </h4>
+          <ul class="list-disc list-inside space-y-1.5 text-emerald-900 font-medium">
+            <li><strong>Jeda Makan Terjadwal:</strong> Makan siang otomatis dialokasikan sekitar jam 12:00-13:00 dan makan malam sekitar jam 18:30-19:30 agar wisatawan tetap bertenaga.</li>
+            <li><strong>Paralayang Banyak (Sore Hari 15:00 - 17:30 WIB):</strong> AI sengaja menempatkan bukit Paralayang di sore hari agar turis tidak terkena sengatan matahari siang dan bisa menikmati pemandangan senja (*sunset*) yang sejuk.</li>
+            <li><strong>Museum Angkut & Jatim Park 3 (Siang Hari):</strong> Dipilih saat siang karena wahananya tertutup (*indoor* sejuk ber-AC) sehingga melindungi wisatawan dari terik siang.</li>
+            <li><strong>Alun-Alun Kota Batu (Sore Menjelang Malam 17:00 - 20:30 WIB):</strong> Kuliner Pos Ketan Legenda 1967 dan gemerlap lampu bianglala Alun-Alun paling hidup dan nikmat dinikmati saat senja hingga malam di tengah hawa dingin Batu.</li>
+          </ul>
+        </div>
+
+        <!-- Tabel Formal PAD Buat Dosen -->
+        <div class="mt-3 pt-3 border-t border-slate-100">
+          <h5 class="font-extrabold text-slate-900 text-xs mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-code text-indigo-600"></i> Rumus Formal STRIPS (Daftar-PAD):
+          </h5>
+          <div class="grid grid-cols-3 gap-2 font-mono text-[11px]">
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="font-bold text-sky-700 block mb-1">P (Precondition)</span>
+              Jam buka terpenuhi dan saldo uang saku mencukupi tiket/parkir.
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="font-bold text-emerald-700 block mb-1">A (Add Effect)</span>
+              Status tempat menjadi VISITED, status perut HAD_LUNCH/DINNER.
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="font-bold text-rose-700 block mb-1">D (Delete Effect)</span>
+              Uang saku terpotong (tiket, makan, dan retribusi parkir).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-end">
+        <button onclick="closeAIExplainerModal()" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition">Paham, Terima Kasih</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SCRIPT LOGIKA STRIPS LENGKAP, TARIF WEEKDAY/WEEKEND, MAKAN, PARKIR, GOOGLE MAPS -->
+  <script>
+    // =========================================================================
+    // 1. BASIS DATA DESTINASI WISATA KOTA BATU (12 DESTINASI LENGKAP + TARIF HARI)
+    // =========================================================================
+    const DESTINATIONS = {
+      "Stasiun_Malang": {
+        id: "Stasiun_Malang",
+        name: "Stasiun Kota Malang",
+        shortName: "Stasiun Malang",
+        gmapsQuery: "Stasiun Malang Kotabaru",
+        lat: -7.9772,
+        lng: 112.6375,
+        open: 0,
+        close: 1440,
+        optWindow: [0, 1440],
+        price_weekday: 0,
+        price_weekend: 0,
+        dur: 0,
+        cat: "transport",
+        catLabel: "Titik Kedatangan",
+        icon: "fa-train",
+        isAttraction: false
+      },
+      "Hotel_Batu": {
+        id: "Hotel_Batu",
+        name: "Hotel di Kota Batu",
+        shortName: "Hotel Penginapan",
+        gmapsQuery: "Pusat Kota Batu, Jawa Timur",
+        lat: -7.8712,
+        lng: 112.5269,
+        open: 0,
+        close: 1440,
+        optWindow: [0, 1440],
+        price_weekday: 0,
+        price_weekend: 0,
+        dur: 0,
+        cat: "akomodasi",
+        catLabel: "Penginapan",
+        icon: "fa-hotel",
+        isAttraction: false
+      },
+      "Jatim_Park_2": {
+        id: "Jatim_Park_2",
+        name: "Jatim Park 2 (Batu Secret Zoo & Eco Green)",
+        shortName: "Jatim Park 2",
+        gmapsQuery: "Jatim Park 2 Batu",
+        lat: -7.8893,
+        lng: 112.5290,
+        open: 510,   // 08:30 WIB
+        close: 990,  // 16:30 WIB
+        optWindow: [510, 840], // 08:30 - 14:00 (Pagi satwa aktif)
+        price_weekday: 110000,
+        price_weekend: 140000,
+        dur: 180,    // 3 jam
+        cat: "wahana",
+        catLabel: "Satwa & Edukasi",
+        icon: "fa-paw",
+        highlight: "Pagi Segar (Satwa Aktif)",
+        indoor: false,
+        tips: "Satwa paling aktif di pagi hari sebelum jam makan siang.",
+        isAttraction: true
+      },
+      "Museum_Angkut": {
+        id: "Museum_Angkut",
+        name: "Museum Angkut & Pasar Apung",
+        shortName: "Museum Angkut",
+        gmapsQuery: "Museum Angkut Batu",
+        lat: -7.8789,
+        lng: 112.5204,
+        open: 720,   // 12:00 WIB (Buka Siang!)
+        close: 1200, // 20:00 WIB
+        optWindow: [720, 1020], // 12:00 - 17:00 (Indoor sejuk ber-AC)
+        price_weekday: 100000,
+        price_weekend: 120000,
+        dur: 150,    // 2.5 jam
+        cat: "wahana",
+        catLabel: "Museum Klasik",
+        icon: "fa-car",
+        highlight: "Buka Siang (Indoor Ber-AC)",
+        indoor: true,
+        tips: "Sangat pas dikunjungi tengah hari karena wahana indoor teduh ber-AC.",
+        isAttraction: true
+      },
+      "Jatim_Park_3": {
+        id: "Jatim_Park_3",
+        name: "Jatim Park 3 (Dino Park & Millennial Glow)",
+        shortName: "Jatim Park 3",
+        gmapsQuery: "Jatim Park 3 Dino Park Batu",
+        lat: -7.8978,
+        lng: 112.5539,
+        open: 660,   // 11:00 WIB
+        close: 1260, // 21:00 WIB
+        optWindow: [660, 1080], // Siang ke sore/malam
+        price_weekday: 100000,
+        price_weekend: 125000,
+        dur: 150,    // 2.5 jam
+        cat: "wahana",
+        catLabel: "Dino Park & Lampion Glow",
+        icon: "fa-dragon",
+        highlight: "Indoor & Lampu Interaktif",
+        indoor: true,
+        tips: "Millennial Glow Garden dan Dino Park sangat fotogenik.",
+        isAttraction: true
+      },
+      "Paralayang_Batu": {
+        id: "Paralayang_Batu",
+        name: "Paralayang & Omah Kayu",
+        shortName: "Paralayang Banyak",
+        gmapsQuery: "Wisata Paralayang Gunung Banyak Batu",
+        lat: -7.8596,
+        lng: 112.4927,
+        open: 420,   // 07:00 WIB
+        close: 1080, // 18:00 WIB
+        optWindow: [900, 1080], // 15:00 - 18:00 (Sore Hari Sunset Sejuk!)
+        price_weekday: 25000,
+        price_weekend: 35000,
+        dur: 90,     // 1.5 jam
+        cat: "alam",
+        catLabel: "Panorama Bukit",
+        icon: "fa-mountain-sun",
+        highlight: "Sore Sunset (Sejuk Pemandangan)",
+        indoor: false,
+        tips: "Waktu terbaik menjelang senja; hindari siang terik di puncak.",
+        isAttraction: true
+      },
+      "Coban_Rondo": {
+        id: "Coban_Rondo",
+        name: "Air Terjun Coban Rondo & Taman Labirin",
+        shortName: "Coban Rondo",
+        gmapsQuery: "Air Terjun Coban Rondo Pujon Malang",
+        lat: -7.8845,
+        lng: 112.4776,
+        open: 450,   // 07:30 WIB
+        close: 1020, // 17:00 WIB
+        optWindow: [480, 780], // Pagi ke siang sejuk
+        price_weekday: 35000,
+        price_weekend: 40000,
+        dur: 120,    // 2 jam
+        cat: "alam",
+        catLabel: "Air Terjun & Labirin",
+        icon: "fa-water",
+        highlight: "Pagi Sejuk Hutan Pinus",
+        indoor: false,
+        tips: "Nikmati udara segar hutan pinus dan serunya labirin hijau di pagi hari.",
+        isAttraction: true
+      },
+      "San_Terra": {
+        id: "San_Terra",
+        name: "Flora Wisata San Terra de Laponte",
+        shortName: "San Terra",
+        gmapsQuery: "Flora Wisata San Terra de Laponte Pujon",
+        lat: -7.8488,
+        lng: 112.4715,
+        open: 480,   // 08:00 WIB
+        close: 1020, // 17:00 WIB
+        optWindow: [480, 840], // Pagi ke siang awal
+        price_weekday: 30000,
+        price_weekend: 35000,
+        dur: 120,    // 2 jam
+        cat: "alam",
+        catLabel: "Taman Bunga Eropa",
+        icon: "fa-camera-retro",
+        highlight: "Spot Foto Estetik Kekinian",
+        indoor: false,
+        tips: "Taman bunga bergaya Korea dan Belanda, cahaya pagi paling bagus untuk berfoto.",
+        isAttraction: true
+      },
+      "Selecta": {
+        id: "Selecta",
+        name: "Taman Rekreasi Selecta",
+        shortName: "Taman Selecta",
+        gmapsQuery: "Taman Rekreasi Selecta Bumiaji Kota Batu",
+        lat: -7.8188,
+        lng: 112.5275,
+        open: 420,   // 07:00 WIB
+        close: 1020, // 17:00 WIB
+        optWindow: [450, 720], // 07:30 - 12:00 (Pagi sejuk kebun bunga)
+        price_weekday: 50000,
+        price_weekend: 50000,
+        dur: 120,    // 2 jam
+        cat: "alam",
+        catLabel: "Taman Bunga Pegunungan",
+        icon: "fa-seedling",
+        highlight: "Pagi Segar Pegunungan",
+        indoor: false,
+        tips: "Bunga mekar sempurna & hawa pegunungan paling segar di pagi hari.",
+        isAttraction: true
+      },
+      "Petik_Apel_Kusuma": {
+        id: "Petik_Apel_Kusuma",
+        name: "Agrowisata Petik Apel Kusuma",
+        shortName: "Petik Apel Kusuma",
+        gmapsQuery: "Kusuma Agrowisata Petik Apel Batu",
+        lat: -7.8783,
+        lng: 112.5115,
+        open: 480,   // 08:00 WIB
+        close: 1020, // 17:00 WIB
+        optWindow: [480, 780], // 08:00 - 13:00 (Pagi petik buah)
+        price_weekday: 60000,
+        price_weekend: 70000,
+        dur: 90,     // 1.5 jam
+        cat: "alam",
+        catLabel: "Petik Buah Asli",
+        icon: "fa-apple-whole",
+        highlight: "Pagi - Siang (Petik Buah)",
+        indoor: false,
+        tips: "Petik apel langsung dari pohon saat embun masih ada.",
+        isAttraction: true
+      },
+      "Coban_Rais": {
+        id: "Coban_Rais",
+        name: "Coban Rais & Batu Flower Garden",
+        shortName: "Coban Rais",
+        gmapsQuery: "Coban Rais Batu Flower Garden",
+        lat: -7.9042,
+        lng: 112.5146,
+        open: 480,   // 08:00 WIB
+        close: 960,  // 16:00 WIB
+        optWindow: [480, 750], // Pagi
+        price_weekday: 35000,
+        price_weekend: 45000,
+        dur: 120,    // 2 jam
+        cat: "alam",
+        catLabel: "Spot Foto Gardu Pandang",
+        icon: "fa-tree",
+        highlight: "Spot Foto Gardu Pandang",
+        indoor: false,
+        tips: "Spot foto ayunan dan bukit bunga sangat asri di pagi hari.",
+        isAttraction: true
+      },
+      "BNS": {
+        id: "BNS",
+        name: "Batu Night Spectacular (BNS)",
+        shortName: "BNS (Pasar Malam)",
+        gmapsQuery: "Batu Night Spectacular BNS Batu",
+        lat: -7.8967,
+        lng: 112.5348,
+        open: 900,   // 15:00 WIB
+        close: 1380, // 23:00 WIB
+        optWindow: [1080, 1380], // 18:00 - 23:00 (Malam lampion)
+        price_weekday: 40000,
+        price_weekend: 50000,
+        dur: 120,    // 2 jam
+        cat: "wahana",
+        catLabel: "Wahana Malam",
+        icon: "fa-moon",
+        highlight: "Malam Gemerlap Lampion",
+        indoor: false,
+        tips: "Lampion menyala indah setelah matahari terbenam.",
+        isAttraction: true
+      },
+      "Alun_Alun_Batu": {
+        id: "Alun_Alun_Batu",
+        name: "Alun-Alun Kota Batu & Pos Ketan",
+        shortName: "Alun-Alun Batu",
+        gmapsQuery: "Alun-Alun Kota Batu",
+        lat: -7.8710,
+        lng: 112.5273,
+        open: 0,     // 24 Jam
+        close: 1440,
+        optWindow: [1020, 1380], // 17:00 - 23:00 (Sore-Malam Kuliner Ramai)
+        price_weekday: 0,
+        price_weekend: 0,
+        dur: 60,     // 1 jam
+        cat: "santai",
+        catLabel: "Kuliner & Santai",
+        icon: "fa-utensils",
+        highlight: "Sore / Malam (Pos Ketan)",
+        indoor: false,
+        tips: "Pos Ketan Legenda & bianglala lampu paling hidup di malam hari.",
+        isAttraction: true
+      },
+      "Brawijaya_Oleh_Oleh": {
+        id: "Brawijaya_Oleh_Oleh",
+        name: "Pusat Oleh-Oleh Brawijaya",
+        shortName: "Oleh-Oleh Brawijaya",
+        gmapsQuery: "Brawijaya Istana Oleh-Oleh Batu",
+        lat: -7.8872,
+        lng: 112.5385,
+        open: 480,   // 08:00 WIB
+        close: 1320, // 22:00 WIB
+        optWindow: [960, 1260], // 16:00 - 21:00 (Sore sebelum pulang)
+        price_weekday: 0,
+        price_weekend: 0,
+        dur: 45,     // 45 menit
+        cat: "santai",
+        catLabel: "Pusat Belanja Suvenir",
+        icon: "fa-bag-shopping",
+        highlight: "Sore Belanja Suvenir",
+        indoor: true,
+        tips: "Waktu ideal membeli keripik apel dan suvenir sebelum kembali ke hotel.",
+        isAttraction: true
+      }
+    };
+
+    // Matriks Jarak & Waktu Tempuh Riil (Menit)
+    const TRAVEL_MATRIX = {
+      "Stasiun_Malang|Hotel_Batu": 45,
+      "Stasiun_Malang|Jatim_Park_2": 50,
+      "Stasiun_Malang|Jatim_Park_3": 40,
+      "Stasiun_Malang|Alun_Alun_Batu": 45,
+      "Stasiun_Malang|Museum_Angkut": 50,
+      "Stasiun_Malang|Selecta": 60,
+      "Hotel_Batu|Jatim_Park_2": 15,
+      "Hotel_Batu|Jatim_Park_3": 18,
+      "Hotel_Batu|Museum_Angkut": 12,
+      "Hotel_Batu|Alun_Alun_Batu": 8,
+      "Hotel_Batu|BNS": 16,
+      "Hotel_Batu|Selecta": 25,
+      "Hotel_Batu|Paralayang_Batu": 30,
+      "Hotel_Batu|Coban_Rondo": 28,
+      "Hotel_Batu|San_Terra": 32,
+      "Hotel_Batu|Petik_Apel_Kusuma": 15,
+      "Hotel_Batu|Coban_Rais": 22,
+      "Hotel_Batu|Brawijaya_Oleh_Oleh": 10,
+      "Jatim_Park_2|Museum_Angkut": 12,
+      "Jatim_Park_2|Jatim_Park_3": 15,
+      "Jatim_Park_2|BNS": 8,
+      "Jatim_Park_2|Alun_Alun_Batu": 14,
+      "Jatim_Park_3|Museum_Angkut": 20,
+      "Jatim_Park_3|Brawijaya_Oleh_Oleh": 8,
+      "Museum_Angkut|Alun_Alun_Batu": 10,
+      "Museum_Angkut|Petik_Apel_Kusuma": 12,
+      "Museum_Angkut|Paralayang_Batu": 25,
+      "Paralayang_Batu|Alun_Alun_Batu": 22,
+      "Coban_Rondo|San_Terra": 18,
+      "Coban_Rondo|Paralayang_Batu": 25,
+      "San_Terra|Paralayang_Batu": 20,
+      "Selecta|Paralayang_Batu": 25,
+      "Petik_Apel_Kusuma|Paralayang_Batu": 20,
+      "Coban_Rais|BNS": 14,
+      "Alun_Alun_Batu|BNS": 15,
+      "BNS|Brawijaya_Oleh_Oleh": 10,
+      "Brawijaya_Oleh_Oleh|Stasiun_Malang": 42
+    };
+
+    function getTravelDuration(fromId, toId, vehicleType = 'motor', isWeekend = false) {
+      if (fromId === toId) return 0;
+      const k1 = `${fromId}|${toId}`;
+      const k2 = `${toId}|${fromId}`;
+      let base = 18;
+      if (TRAVEL_MATRIX[k1]) base = TRAVEL_MATRIX[k1];
+      else if (TRAVEL_MATRIX[k2]) base = TRAVEL_MATRIX[k2];
+
+      if (vehicleType === 'mobil') {
+        const trafficFactor = isWeekend ? 1.25 : 1.1;
+        return Math.round(base * trafficFactor);
+      }
+      return base;
+    }
+
+    function minToTimeStr(mins) {
+      const h = Math.floor(mins / 60) % 24;
+      const m = mins % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function timeStrToMin(str) {
+      const parts = str.split(':');
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    }
+
+    // =========================================================================
+    // 2. DETEKSI TANGGAL LIBURAN & STATUS WEEKDAY/WEEKEND
+    // =========================================================================
+    function getSelectedDateInfo() {
+      const dateVal = document.getElementById('visitDateInput').value;
+      if (!dateVal) return { dateStr: '', dayName: '', isWeekend: false };
+      
+      const d = new Date(dateVal + 'T00:00:00');
+      const dayIndex = d.getDay();
+      const isWeekend = (dayIndex === 0 || dayIndex === 6);
+      
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      
+      const formatted = `${dayNames[dayIndex]}, ${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+      return { dateStr: dateVal, formatted, dayName: dayNames[dayIndex], isWeekend };
+    }
+
+    function onDateChanged() {
+      const info = getSelectedDateInfo();
+      const badge = document.getElementById('dayTypeBadge');
+      const friendly = document.getElementById('dateFriendlyLabel');
+
+      if (info.isWeekend) {
+        badge.className = "text-xs font-bold px-3 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-300";
+        badge.innerHTML = "📅 Weekend (Sabtu/Minggu) - Berlaku Tarif Libur";
+        friendly.textContent = `${info.formatted} (Musim Liburan Akhir Pekan)`;
+      } else {
+        badge.className = "text-xs font-bold px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200";
+        badge.innerHTML = "📅 Weekday (Senin-Jumat) - Tarif Reguler Hemat";
+        friendly.textContent = `${info.formatted} (Hari Kerja / Reguler)`;
+      }
+
+      renderAttractionCards();
+    }
+
+    // =========================================================================
+    // 3. ANGGARAN UANG SAKU BEBAS CUSTOM (CUSTOM BUDGET)
+    // =========================================================================
+    function onCustomBudgetInput(val) {
+      const num = parseInt(val, 10);
+      const disp = document.getElementById('budgetDisplay');
+      if (isNaN(num) || num <= 0) {
+        disp.textContent = "Belum diisi";
+        disp.className = "text-xs font-bold font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200";
+      } else {
+        disp.textContent = `Rp ${num.toLocaleString('id-ID')}`;
+        disp.className = "text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200";
+      }
+    }
+
+    function setBudgetAmount(amt) {
+      document.getElementById('budgetInput').value = amt;
+      onCustomBudgetInput(amt);
+    }
+
+    function getBudgetAmount() {
+      const val = parseInt(document.getElementById('budgetInput').value, 10);
+      return isNaN(val) || val <= 0 ? 0 : val;
+    }
+
+    // =========================================================================
+    // 4. NAVIGASI LANGKAH DEMI LANGKAH (STEP WIZARD)
+    // =========================================================================
+    function goToStep(stepNum) {
+      // Validasi waktu & budget saat pindah dari Langkah 1 ke Langkah 2
+      if (stepNum === 2) {
+        const startMins = timeStrToMin(document.getElementById('startTimeInput').value);
+        const endMins = timeStrToMin(document.getElementById('endTimeInput').value);
+        if (endMins <= startMins) {
+          alert("Jam selesai liburan harus lebih lambat dari jam mulai keberangkatan! Silakan periksa kembali waktu kunjungan Anda.");
+          return;
+        }
+        if (endMins - startMins < 120) {
+          alert("Durasi waktu liburan minimal 2 jam agar perencanaan jadwal wisata realistis.");
+          return;
+        }
+
+        const bAmt = getBudgetAmount();
+        if (bAmt <= 0) {
+          alert("Silakan masukkan nominal anggaran uang saku liburan Anda terlebih dahulu!");
+          document.getElementById('budgetInput').focus();
+          return;
+        }
+      }
+
+      document.getElementById('step1').classList.add('hidden');
+      document.getElementById('step2').classList.add('hidden');
+      document.getElementById('step3').classList.add('hidden');
+
+      document.getElementById(`step${stepNum}`).classList.remove('hidden');
+
+      for (let i = 1; i <= 3; i++) {
+        const ind = document.getElementById(`stepIndicator${i}`);
+        const circle = ind.querySelector('span');
+        if (i === stepNum) {
+          circle.className = "w-8 h-8 rounded-full bg-sky-600 text-white font-bold text-xs flex items-center justify-center shadow-md shadow-sky-500/30";
+        } else if (i < stepNum) {
+          circle.className = "w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center";
+          circle.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i>';
+        } else {
+          circle.className = "w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center";
+          circle.textContent = i;
+        }
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (stepNum === 3 && map) {
+        setTimeout(() => { map.invalidateSize(); }, 300);
+      }
+    }
+
+    // =========================================================================
+    // 5. PRESET GAYA LIBURAN & STATE PILIHAN DESTINASI (BEBAS PILIH DARI 0)
+    // =========================================================================
+    const selectedAttractions = new Set();
+
+    function applyMoodPreset(presetKey) {
+      const presets = {
+        healing: ["Coban_Rondo", "Paralayang_Batu", "Selecta"],
+        keluarga: ["Jatim_Park_2", "Petik_Apel_Kusuma", "Museum_Angkut"],
+        genz: ["San_Terra", "Jatim_Park_3", "Paralayang_Batu"],
+        kuliner: ["Petik_Apel_Kusuma", "Alun_Alun_Batu", "BNS"]
+      };
+
+      const selected = presets[presetKey] || [];
+      selectedAttractions.clear();
+      selected.forEach(k => selectedAttractions.add(k));
+
+      renderAttractionCards();
+      
+      if (window.event && window.event.currentTarget) {
+        const btn = window.event.currentTarget;
+        btn.classList.add('scale-95');
+        setTimeout(() => { btn.classList.remove('scale-95'); }, 150);
+      }
+    }
+
+    function clearAllSelections() {
+      selectedAttractions.clear();
+      renderAttractionCards();
+    }
+
+    // =========================================================================
+    // 6. RENDER KARTU TEMPAT WISATA DI LANGKAH 2 (DINAMIS HARGA WEEKDAY/WEEKEND)
+    // =========================================================================
+    let currentCategoryFilter = 'all';
+
+    function renderAttractionCards(filterCat = currentCategoryFilter) {
+      currentCategoryFilter = filterCat;
+      const container = document.getElementById('attractionsGrid');
+      container.innerHTML = '';
+      const { isWeekend } = getSelectedDateInfo();
+
+      for (const [key, d] of Object.entries(DESTINATIONS)) {
+        if (!d.isAttraction) continue;
+        if (filterCat !== 'all' && d.cat !== filterCat) continue;
+
+        const effectivePrice = isWeekend ? d.price_weekend : d.price_weekday;
+        const isChecked = selectedAttractions.has(key);
+
+        const card = document.createElement('label');
+        card.className = "cursor-pointer block";
+        card.innerHTML = `
+          <div class="relative p-4 rounded-2xl bg-white border-2 ${isChecked ? 'border-sky-500 bg-sky-50/30 ring-1 ring-sky-500/20' : 'border-slate-200'} hover:border-slate-300 transition shadow-sm card-item flex items-start gap-3.5">
+            <input type="checkbox" value="${key}" ${isChecked ? 'checked' : ''} onchange="onAttractionChecked(this)" class="accent-sky-600 w-5 h-5 rounded mt-0.5 cursor-pointer flex-shrink-0">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-1">
+                <h4 class="font-bold text-slate-900 text-sm truncate">${d.name}</h4>
+                <span class="text-xs font-bold font-mono ${effectivePrice === 0 ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded' : 'text-amber-800 bg-amber-50 px-2 py-0.5 rounded'}">
+                  ${effectivePrice === 0 ? 'Gratis' : 'Rp ' + effectivePrice.toLocaleString('id-ID')}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                <span><i class="fa-regular fa-clock text-slate-400"></i> ${minToTimeStr(d.open)} - ${minToTimeStr(d.close)} WIB</span>
+                <span>&bull;</span>
+                <span>${d.dur} menit</span>
+                ${isWeekend && d.price_weekend > d.price_weekday ? `<span class="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded">Weekend</span>` : ''}
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <span class="inline-block text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                  ⭐ ${d.highlight}
+                </span>
+                ${d.indoor ? `<span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">Ber-AC/Indoor</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      }
+
+      updateStep2Count();
+    }
+
+    function onAttractionChecked(cb) {
+      if (cb.checked) {
+        selectedAttractions.add(cb.value);
+      } else {
+        selectedAttractions.delete(cb.value);
+      }
+      
+      const cardBox = cb.closest('.card-item');
+      if (cardBox) {
+        if (cb.checked) {
+          cardBox.classList.add('border-sky-500', 'bg-sky-50/30', 'ring-1', 'ring-sky-500/20');
+          cardBox.classList.remove('border-slate-200');
+        } else {
+          cardBox.classList.remove('border-sky-500', 'bg-sky-50/30', 'ring-1', 'ring-sky-500/20');
+          cardBox.classList.add('border-slate-200');
+        }
+      }
+
+      updateStep2Count();
+    }
+
+    function updateStep2Count() {
+      const badge = document.getElementById('step2SelectedBadge');
+      if (!badge) return;
+      const count = selectedAttractions.size;
+      if (count > 0) {
+        badge.className = "text-xs font-bold text-sky-700 bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200 transition-all";
+        badge.textContent = `${count} Destinasi Dipilih`;
+      } else {
+        badge.className = "text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 transition-all";
+        badge.textContent = "0 Destinasi Dipilih";
+      }
+    }
+
+    function filterAttractions(cat) {
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = "cat-pill px-3 py-1.5 rounded-xl font-bold bg-sky-600 text-white text-xs";
+        } else {
+          btn.className = "cat-pill px-3 py-1.5 rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs";
+        }
+      });
+      renderAttractionCards(cat);
+    }
+
+    // =========================================================================
+    // 7. STRIPS PLANNER CERDAS DENGAN MEAL TIMES & KENDARAAN
+    // =========================================================================
+    function runSTRIPSPlanner(startLoc, startMins, maxEndMins, initialBudget, goals, vehicleType, isWeekend) {
+      let state = {
+        loc: startLoc,
+        time: startMins,
+        budget: initialBudget,
+        visited: new Set(),
+        tickets: new Set(),
+        hadLunch: false,
+        hadDinner: false,
+        ticketCost: 0,
+        mealCost: 0,
+        parkingCost: 0
+      };
+
+      const steps = [];
+      const targetGoals = new Set(goals);
+      let stepNo = 1;
+      const routeLocSequence = [startLoc];
+
+      // Biaya Parkir Berdasarkan Kendaraan
+      const parkFeePerSpot = (vehicleType === 'mobil') ? 10000 : 4000;
+
+      while (state.visited.size < targetGoals.size && state.time < maxEndMins) {
+        
+        // --- JEDA MAKAN SIANG (SEKITAR 11:30 - 14:00) DENGAN PRECONDITION ANGGARAN ---
+        if (!state.hadLunch && state.time >= 690 && state.time <= 870) {
+          let lunchCost = 35000;
+          let lunchTitle = "Istirahat & Makan Siang Khas Batu";
+          let lunchDesc = `Menikmati hidangan makan siang di sekitar ${DESTINATIONS[state.loc].shortName} (Rawon / Soto khas Jawa Timur).`;
+          
+          // Precondition Budget Check: Relaksasi anggaran jika saldo menipis
+          if (state.budget < 15000) {
+            lunchCost = 0;
+            lunchTitle = "Istirahat Siang & Santai Hemat";
+            lunchDesc = `Istirahat sejenak di tempat teduh & menikmati bekal santai (tanpa pengeluaran resto agar anggaran tidak minus).`;
+          } else if (state.budget < 35000) {
+            lunchCost = 15000;
+            lunchTitle = "Makan Siang Menu Hemat";
+            lunchDesc = `Menikmati makan siang hemat di warung lokal sekitar ${DESTINATIONS[state.loc].shortName}.`;
+          }
+
+          const lStart = state.time;
+          const lEnd = lStart + 45;
+          state.hadLunch = true;
+          state.mealCost += lunchCost;
+          state.budget -= lunchCost;
+
+          steps.push({
+            no: stepNo++,
+            type: "MEAL",
+            title: lunchTitle,
+            desc: lunchDesc,
+            start: minToTimeStr(lStart),
+            end: minToTimeStr(lEnd),
+            dur: 45,
+            cost: lunchCost,
+            costCategory: "Makan",
+            remainBudget: state.budget,
+            reason: `Kenyamanan Wisatawan: Menjaga stamina di tengah agenda padat (biaya makan disesuaikan kemampuan anggaran).`,
+            tips: "Coba tempe mendol dan sambal khas Kota Batu.",
+            locKey: state.loc
+          });
+          state.time = lEnd;
+        }
+
+        // --- JEDA MAKAN MALAM (SEKITAR 18:00 - 20:30) DENGAN PRECONDITION ANGGARAN ---
+        if (!state.hadDinner && state.time >= 1080 && state.time <= 1260) {
+          let dinnerCost = 30000;
+          let dinnerTitle = "Santap Kuliner Malam & Minuman Hangat";
+          let dinnerDesc = `Menikmati hidangan malam (Sate Kelinci / Bakso De Sampoerna / Pos Ketan Legenda 1967) di udara sejuk malam Kota Batu.`;
+
+          if (state.budget < 15000) {
+            dinnerCost = 0;
+            dinnerTitle = "Santai Menikmati Suasana Malam";
+            dinnerDesc = `Menikmati gemerlap lampu malam Kota Batu santai tanpa biaya konsumsi resto.`;
+          } else if (state.budget < 30000) {
+            dinnerCost = 15000;
+            dinnerTitle = "Kuliner Malam Menu Hemat";
+            dinnerDesc = `Santap malam hemat di kedai kuliner jalanan khas Batu.`;
+          }
+
+          const dStart = state.time;
+          const dEnd = dStart + 45;
+          state.hadDinner = true;
+          state.mealCost += dinnerCost;
+          state.budget -= dinnerCost;
+
+          steps.push({
+            no: stepNo++,
+            type: "MEAL",
+            title: dinnerTitle,
+            desc: dinnerDesc,
+            start: minToTimeStr(dStart),
+            end: minToTimeStr(dEnd),
+            dur: 45,
+            cost: dinnerCost,
+            costCategory: "Makan",
+            remainBudget: state.budget,
+            reason: `Kenyamanan Wisatawan: Santap malam santai menghangatkan tubuh di hawa sejuk pegunungan.`,
+            tips: "Ketan bubuk dengan susu hangat sangat cocok untuk malam hari.",
+            locKey: state.loc
+          });
+          state.time = dEnd;
+        }
+
+        const unvisited = Array.from(targetGoals).filter(g => !state.visited.has(g));
+        if (unvisited.length === 0) break;
+
+        // EVALUASI PRECONDITION STRIPS:
+        // Filter kandidat destinasi yang memenuhi syarat:
+        // 1. Saldo uang saku mencukupi tiket + retribusi parkir
+        // 2. Estimasi tiba sebelum jam tutup destinasi & durasi tidak melampaui batas waktu kepulangan
+        const feasibleCandidates = unvisited.filter(key => {
+          const d = DESTINATIONS[key];
+          const price = isWeekend ? d.price_weekend : d.price_weekday;
+          const park = d.isAttraction ? parkFeePerSpot : 0;
+          const tTime = getTravelDuration(state.loc, key, vehicleType, isWeekend);
+          const arr = state.time + tTime;
+          
+          const budgetOk = state.budget >= (price + park);
+          const timeOk = (arr < d.close) && (arr + d.dur <= maxEndMins);
+          return budgetOk && timeOk;
+        });
+
+        if (feasibleCandidates.length === 0) {
+          // Precondition STRIPS tidak terpenuhi untuk seluruh sisa target:
+          // Aksi BUY_TICKET/VISIT digugurkan (pruning) dan algoritma berhenti mencari destinasi baru
+          break;
+        }
+
+        // HEURISTIK CERDAS: Jarak, Jam Buka, & Kenyamanan Waktu Wisata
+        feasibleCandidates.sort((a, b) => {
+          const tA = getTravelDuration(state.loc, a, vehicleType, isWeekend);
+          const tB = getTravelDuration(state.loc, b, vehicleType, isWeekend);
+          const arrA = state.time + tA;
+          const arrB = state.time + tB;
+          const waitA = Math.max(0, DESTINATIONS[a].open - arrA);
+          const waitB = Math.max(0, DESTINATIONS[b].open - arrB);
+
+          // Penalti besar jika loket masih tutup lama (> 30 menit) agar mendahulukan wahana yang sudah buka
+          let waitPenA = waitA;
+          if (waitA > 30) waitPenA = waitA * 8;
+          let waitPenB = waitB;
+          if (waitB > 30) waitPenB = waitB * 8;
+
+          let penA = 0;
+          if (arrA < DESTINATIONS[a].optWindow[0]) {
+            penA = (DESTINATIONS[a].optWindow[0] - arrA) * 1.5;
+          } else if (arrA > DESTINATIONS[a].optWindow[1]) {
+            penA = (arrA - DESTINATIONS[a].optWindow[1]) * 2.0;
+          }
+
+          let penB = 0;
+          if (arrB < DESTINATIONS[b].optWindow[0]) {
+            penB = (DESTINATIONS[b].optWindow[0] - arrB) * 1.5;
+          } else if (arrB > DESTINATIONS[b].optWindow[1]) {
+            penB = (arrB - DESTINATIONS[b].optWindow[1]) * 2.0;
+          }
+
+          return (tA + waitPenA + penA) - (tB + waitPenB + penB);
+        });
+
+        const nextKey = feasibleCandidates[0];
+        const dest = DESTINATIONS[nextKey];
+        const tDuration = getTravelDuration(state.loc, nextKey, vehicleType, isWeekend);
+        const ticketPrice = isWeekend ? dest.price_weekend : dest.price_weekday;
+
+        // Manajemen Cerdas Waktu Buka: Jika estimasi tiba terlalu awal (> 30 menit sebelum buka),
+        // hindari langsung berangkat untuk menunggu di depan loket yang masih tutup.
+        // Alihkan waktu luang ke makan siang (jika pas jam makan) atau santai coffee break di kafe lokal.
+        const estArrival = state.time + tDuration;
+        const earlyWait = Math.max(0, dest.open - estArrival);
+        if (earlyWait > 30) {
+          // 1. Cek Makan Siang terlebih dahulu jika berada di jam 11:00 - 14:30
+          if (!state.hadLunch && state.time >= 660 && state.time <= 870) {
+            let lunchCost = 35000;
+            let lunchTitle = "Istirahat & Makan Siang Khas Batu";
+            let lunchDesc = `Menikmati hidangan makan siang di sekitar ${DESTINATIONS[state.loc].shortName} (Rawon / Soto khas Jawa Timur).`;
+            if (state.budget < 15000) {
+              lunchCost = 0;
+              lunchTitle = "Istirahat Siang & Santai Hemat";
+              lunchDesc = `Istirahat sejenak di tempat teduh & menikmati bekal santai (tanpa pengeluaran resto agar saldo tidak minus).`;
+            } else if (state.budget < 35000) {
+              lunchCost = 15000;
+              lunchTitle = "Makan Siang Menu Hemat";
+              lunchDesc = `Menikmati makan siang hemat di warung lokal sekitar ${DESTINATIONS[state.loc].shortName}.`;
+            }
+            const lStart = state.time;
+            const lEnd = lStart + 45;
+            state.hadLunch = true;
+            state.mealCost += lunchCost;
+            state.budget -= lunchCost;
+            steps.push({
+              no: stepNo++,
+              type: "MEAL",
+              title: lunchTitle,
+              desc: lunchDesc,
+              start: minToTimeStr(lStart),
+              end: minToTimeStr(lEnd),
+              dur: 45,
+              cost: lunchCost,
+              costCategory: "Makan",
+              remainBudget: state.budget,
+              reason: `Kenyamanan Wisatawan: Mengisi energi siang hari sembari menunggu jam buka operasional wahana berikutnya.`,
+              tips: "Coba tempe mendol dan sambal khas Kota Batu.",
+              locKey: state.loc
+            });
+            state.time = lEnd;
+          }
+
+          // 2. Jika setelah makan (atau jika sudah makan) masih ada jeda > 15 menit sebelum waktu berangkat
+          const targetDeparture = dest.open - tDuration;
+          if (targetDeparture > state.time + 15) {
+            const leisureDur = targetDeparture - state.time;
+            steps.push({
+              no: stepNo++,
+              type: "WAIT",
+              title: "Istirahat Santai & Coffee Break di Cafe Nuansa Alam",
+              desc: `Karena loket resmi ${dest.shortName} baru buka pukul ${minToTimeStr(dest.open)} WIB, wisatawan bersantai sejenak di kafe lokal Kota Batu untuk menikmati kopi/teh hangat dan panorama asri pegunungan sebelum berangkat.`,
+              start: minToTimeStr(state.time),
+              end: minToTimeStr(targetDeparture),
+              dur: leisureDur,
+              cost: 0,
+              costCategory: "Santai",
+              remainBudget: state.budget,
+              reason: `Precondition STRIPS Waktu Buka: Loket ${dest.shortName} buka pukul ${minToTimeStr(dest.open)} WIB. Lebih nyaman bersantai di kafe lereng bukit daripada menunggu lama di depan gerbang yang masih tutup.`,
+              tips: "Bisa berfoto santai di spot pemandangan alam Kota Batu.",
+              locKey: state.loc
+            });
+            state.time = targetDeparture;
+          }
+        }
+
+        // Operasi 1: TRAVEL
+        if (state.loc !== nextKey) {
+          const tStart = state.time;
+          const tEnd = tStart + tDuration;
+          
+          let aiReason = `AI mengarahkan ke ${dest.shortName} pada waktu ini agar selaras dengan jam operasional terbaik dan rute efisien.`;
+          if (nextKey === "Museum_Angkut") {
+            aiReason = `Museum Angkut dipilih siang hari karena wahananya indoor ber-AC dan nyaman saat matahari terik.`;
+          } else if (nextKey === "Paralayang_Batu") {
+            aiReason = `Paralayang diarahkan sore hari (15.00-17.30) agar wisatawan menikmati sunset sejuk tanpa tersengat panas siang.`;
+          } else if (nextKey === "Alun_Alun_Batu") {
+            aiReason = `Alun-Alun diarahkan sore/malam hari agar wisatawan menikmati Pos Ketan Legenda dan lampion warna-warni.`;
+          } else if (nextKey === "Jatim_Park_3") {
+            aiReason = `Jatim Park 3 berformat indoor semi-modern sangat cocok dikunjungi siang-sore.`;
+          }
+
+          steps.push({
+            no: stepNo++,
+            type: "TRAVEL",
+            title: `Perjalanan ke ${dest.shortName}`,
+            desc: `Berangkat dari ${DESTINATIONS[state.loc].shortName} menuju ${dest.name} dengan ${vehicleType === 'motor' ? 'sepeda motor' : 'mobil pribadi'} (~${tDuration} menit).`,
+            start: minToTimeStr(tStart),
+            end: minToTimeStr(tEnd),
+            dur: tDuration,
+            cost: 0,
+            costCategory: "Transport",
+            remainBudget: state.budget,
+            reason: aiReason,
+            tips: dest.tips || "Perhatikan keselamatan selama perjalanan.",
+            locKey: nextKey
+          });
+
+          state.loc = nextKey;
+          state.time = tEnd;
+          routeLocSequence.push(nextKey);
+        }
+
+        // Operasi 2: RETRIBUSI PARKIR (KECUALI STASIUN/HOTEL)
+        if (dest.isAttraction) {
+          state.parkingCost += parkFeePerSpot;
+          state.budget -= parkFeePerSpot;
+
+          steps.push({
+            no: stepNo++,
+            type: "PARK",
+            title: `Parkir ${vehicleType === 'motor' ? 'Motor' : 'Mobil'} di ${dest.shortName}`,
+            desc: `Membayar retribusi parkir resmi ${vehicleType === 'motor' ? 'motor' : 'mobil'} sebesar Rp ${parkFeePerSpot.toLocaleString('id-ID')}.`,
+            start: minToTimeStr(state.time),
+            end: minToTimeStr(state.time),
+            dur: 3,
+            cost: parkFeePerSpot,
+            costCategory: "Parkir",
+            remainBudget: state.budget,
+            reason: `Biaya operasional riil parkir kendaraan wisata di Kota Batu.`,
+            tips: "Pastikan kendaraan terkunci ganda dan bawa barang berharga.",
+            locKey: nextKey
+          });
+        }
+
+        // Operasi Tunggu Singkat (Jika Tiba Sedikit Lebih Awal dari Jam Buka)
+        if (state.time < dest.open) {
+          const waitTime = dest.open - state.time;
+          steps.push({
+            no: stepNo++,
+            type: "WAIT",
+            title: `Persiapan Masuk & Antre Loket`,
+            desc: `Tiba beberapa menit sebelum loket resmi ${dest.shortName} dibuka (${minToTimeStr(dest.open)} WIB). Memarkir kendaraan dan antre tiket.`,
+            start: minToTimeStr(state.time),
+            end: minToTimeStr(dest.open),
+            dur: waitTime,
+            cost: 0,
+            costCategory: "Santai",
+            remainBudget: state.budget,
+            reason: `Precondition STRIPS: Menyesuaikan waktu dengan jam buka loket resmi (${minToTimeStr(dest.open)} WIB).`,
+            tips: "Siapkan uang pas atau scan QRIS untuk pembayaran cepat.",
+            locKey: nextKey
+          });
+          state.time = dest.open;
+        }
+
+        // Operasi 3: BUY_TICKET
+        if (ticketPrice > 0 && !state.tickets.has(nextKey)) {
+          if (state.budget < ticketPrice) break;
+          state.budget -= ticketPrice;
+          state.ticketCost += ticketPrice;
+          state.tickets.add(nextKey);
+
+          steps.push({
+            no: stepNo++,
+            type: "BUY_TICKET",
+            title: `Beli Tiket Masuk ${dest.shortName}`,
+            desc: `Membeli tiket masuk resmi (${isWeekend ? 'Tarif Weekend' : 'Tarif Weekday'}) seharga Rp ${ticketPrice.toLocaleString('id-ID')}. Uang saku terpotong (Delete List).`,
+            start: minToTimeStr(state.time),
+            end: minToTimeStr(state.time),
+            dur: 5,
+            cost: ticketPrice,
+            costCategory: "Tiket",
+            remainBudget: state.budget,
+            reason: `Precondition: Masuk wahana wajib mengantongi tiket resmi dan saldo mencukupi.`,
+            tips: "Simpan gelang/karcis tiket dengan baik untuk scan di pintu masuk.",
+            locKey: nextKey
+          });
+        }
+
+        // Operasi 4: VISIT
+        const vStart = state.time;
+        const vEnd = vStart + dest.dur;
+        state.visited.add(nextKey);
+        state.tickets.delete(nextKey);
+        state.time = vEnd;
+
+        steps.push({
+          no: stepNo++,
+          type: "VISIT",
+          title: `Eksplorasi & Menikmati ${dest.name}`,
+          desc: `Menikmati wahana, berfoto ria, dan bersantai selama ${dest.dur} menit.`,
+          start: minToTimeStr(vStart),
+          end: minToTimeStr(vEnd),
+          dur: dest.dur,
+          cost: 0,
+          costCategory: "Wahana",
+          remainBudget: state.budget,
+          reason: `Goal tercapai! Status tempat diperbarui menjadi VISITED (Add List).`,
+          tips: dest.tips || "Gunakan sepatu nyaman dan jaga kebersihan lokasi wisata.",
+          locKey: nextKey
+        });
+      }
+
+      // Jeda Makan Malam Sebelum Kembali (Jika Waktu Sudah Masuk Malam & Belum Makan)
+      if (!state.hadDinner && state.time >= 1080 && state.time < maxEndMins) {
+        const dinnerCost = 30000;
+        const dStart = state.time;
+        const dEnd = dStart + 45;
+        state.hadDinner = true;
+        state.mealCost += dinnerCost;
+        state.budget -= dinnerCost;
+
+        steps.push({
+          no: stepNo++,
+          type: "MEAL",
+          title: `Santap Kuliner Malam & Minuman Hangat`,
+          desc: `Menikmati hidangan makan malam di sekitar ${DESTINATIONS[state.loc].shortName} (Bakso De Sampoerna / Sate Kelinci / Pos Ketan Legenda 1967).`,
+          start: minToTimeStr(dStart),
+          end: minToTimeStr(dEnd),
+          dur: 45,
+          cost: dinnerCost,
+          costCategory: "Makan",
+          remainBudget: state.budget,
+          reason: `Kenyamanan Wisatawan: Santap malam santai menghangatkan tubuh di hawa sejuk malam Kota Batu sebelum istirahat.`,
+          tips: "Ketan bubuk dengan susu hangat atau wedang ronde sangat cocok untuk malam hari.",
+          locKey: state.loc
+        });
+        state.time = dEnd;
+      }
+
+      // Operasi Pulang ke Hotel
+      const returnLoc = "Hotel_Batu";
+      let freeTimeMins = 0;
+      if (state.loc !== returnLoc) {
+        const retDur = getTravelDuration(state.loc, returnLoc, vehicleType, isWeekend);
+        const rStart = state.time;
+        const rEnd = rStart + retDur;
+        freeTimeMins = Math.max(0, maxEndMins - rEnd);
+
+        const isNoneVisited = state.visited.size === 0;
+        let retDesc = "";
+        let retReason = "";
+        if (isNoneVisited) {
+          retDesc = `Destinasi pilihan belum dapat dikunjungi karena kendala anggaran/waktu. Menuju penginapan di Kota Batu.`;
+          retReason = `Aksi pemulihan AI: Menghindari perjalanan sia-sia dan mengarahkan wisatawan ke titik aman hotel.`;
+        } else if (freeTimeMins >= 60) {
+          const h = Math.floor(freeTimeMins / 60);
+          const m = freeTimeMins % 60;
+          const timeStr = h > 0 ? (m > 0 ? `${h} jam ${m} menit` : `${h} jam`) : `${m} menit`;
+          retDesc = `Semua agenda wisata pilihan telah selesai lebih awal pukul ${minToTimeStr(rEnd)} WIB. Kembali ke penginapan di Kota Batu untuk beristirahat (tersisa waktu luang santai ${timeStr} sebelum batas kepulangan ${minToTimeStr(maxEndMins)} WIB).`;
+          retReason = `Target wisata tercapai lebih cepat. Sisa waktu luang dapat dimanfaatkan untuk istirahat santai di hotel atau menjelajahi rekomendasi kuliner malam.`;
+        } else {
+          retDesc = `Semua agenda wisata hari ini telah selesai! Kembali ke penginapan di Kota Batu untuk beristirahat.`;
+          retReason = `Semua target wisata yang feasible telah terpenuhi dan waktu mendekati batas kepulangan harian (${minToTimeStr(maxEndMins)} WIB).`;
+        }
+
+        steps.push({
+          no: stepNo++,
+          type: "TRAVEL",
+          title: `Perjalanan ke Penginapan / Hotel`,
+          desc: retDesc,
+          start: minToTimeStr(rStart),
+          end: minToTimeStr(rEnd),
+          dur: retDur,
+          cost: 0,
+          costCategory: "Transport",
+          remainBudget: state.budget,
+          reason: retReason,
+          tips: "Istirahat yang cukup untuk memulihkan energi setelah seharian berwisata.",
+          locKey: returnLoc
+        });
+
+        state.loc = returnLoc;
+        state.time = rEnd;
+        routeLocSequence.push(returnLoc);
+      } else {
+        freeTimeMins = Math.max(0, maxEndMins - state.time);
+      }
+
+      return { 
+        steps, 
+        finalState: state, 
+        route: routeLocSequence, 
+        targetGoals: Array.from(targetGoals),
+        freeTimeMins,
+        maxEndMins
+      };
+    }
+
+    // =========================================================================
+    // 8. PEMBUAT LINK GOOGLE MAPS MULTI-STOP RUTE
+    // =========================================================================
+    function buildGoogleMapsRouteUrl(routeLocs) {
+      if (!routeLocs || routeLocs.length === 0) return "https://www.google.com/maps";
+      
+      // Ambil nama resmi Google Maps untuk pencarian presisi
+      const placeQueries = routeLocs
+        .map(locId => DESTINATIONS[locId] ? DESTINATIONS[locId].gmapsQuery : null)
+        .filter(Boolean);
+
+      if (placeQueries.length === 0) return "https://www.google.com/maps";
+      if (placeQueries.length === 1) {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeQueries[0])}`;
+      }
+
+      // Format multi-stop terverifikasi nama: https://www.google.com/maps/dir/Query1/Query2/Query3/...
+      const encodedStops = placeQueries.map(q => encodeURIComponent(q));
+      return `https://www.google.com/maps/dir/${encodedStops.join('/')}`;
+    }
+
+    // =========================================================================
+    // 9. EKSEKUSI DAN RENDER LANGKAH 3 & VOUCHER PRINT
+    // =========================================================================
+    let currentPlannerData = null;
+
+    function runPlannerAndShowStep3() {
+      const startLoc = document.querySelector('input[name="startLocation"]:checked').value;
+      const vehicleType = document.querySelector('input[name="vehicleType"]:checked').value;
+      const startMins = timeStrToMin(document.getElementById('startTimeInput').value);
+      const endMins = timeStrToMin(document.getElementById('endTimeInput').value);
+      const budget = getBudgetAmount();
+      const dateInfo = getSelectedDateInfo();
+
+      const goals = Array.from(selectedAttractions);
+
+      if (goals.length === 0) {
+        alert("Pilih minimal 1 tempat wisata yang ingin kamu kunjungi di Langkah 2 sebelum menyusun rencana perjalanan!");
+        return;
+      }
+
+      const result = runSTRIPSPlanner(startLoc, startMins, endMins, budget, goals, vehicleType, dateInfo.isWeekend);
+      currentPlannerData = { result, budget, startMins, goalsCount: goals.length, startLoc, vehicleType, dateInfo };
+      
+      // Set Link Google Maps Universal
+      const gmapsUrl = buildGoogleMapsRouteUrl(result.route);
+      document.getElementById('gmapsRouteBtn').href = gmapsUrl;
+      document.getElementById('gmapsMapCardBtn').href = gmapsUrl;
+
+      renderStep3UI(result, budget, startMins, goals.length, dateInfo.isWeekend, vehicleType);
+      renderPrintVoucher(result, budget, startMins, startLoc, endMins, dateInfo, vehicleType);
+      
+      goToStep(3);
+      updateMapWithRoute(result.route);
+    }
+
+    function renderStep3UI(plannerData, initialBudget, startMins, totalGoalsCount, isWeekend, vehicleType) {
+      const { steps, finalState, targetGoals, freeTimeMins, maxEndMins } = plannerData;
+      const timelineContainer = document.getElementById('timelineList');
+      timelineContainer.innerHTML = '';
+
+      const visitedCount = finalState.visited.size;
+      const heroBanner = document.getElementById('step3HeroBanner');
+      const heroTag = document.getElementById('step3HeroTag');
+      const heroTitle = document.getElementById('step3HeroTitle');
+      const heroDesc = document.getElementById('step3HeroDesc');
+      const printBtn = document.getElementById('step3PrintBtn');
+      const parkFeePerSpot = (vehicleType === 'mobil') ? 10000 : 4000;
+
+      // Logika Penyesuaian Header: Berhasil vs Kendala Precondition Total
+      if (visitedCount === 0) {
+        heroBanner.className = "bg-gradient-to-r from-amber-600 to-rose-700 rounded-2xl p-6 text-white shadow-lg flex flex-wrap items-center justify-between gap-4 transition-all";
+        heroTag.innerHTML = "⚠️ Perencanaan Terbentur Syarat STRIPS";
+        heroTag.className = "px-3 py-1 rounded-full bg-white/20 text-white font-bold text-[11px] backdrop-blur uppercase tracking-wider";
+        heroTitle.textContent = "Anggaran Belum Mencukupi untuk Destinasi Pilihan";
+        heroDesc.textContent = "Seluruh destinasi yang dipilih tidak memenuhi syarat formal Precondition (anggaran tidak cukup atau batas waktu habis).";
+        
+        if (printBtn) {
+          printBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          printBtn.onclick = () => alert("Voucher belum dapat dicetak karena belum ada destinasi wisata yang berhasil dijadwalkan. Silakan tambahkan uang saku atau pilih destinasi alternatif.");
+        }
+      } else {
+        heroBanner.className = "bg-gradient-to-r from-sky-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg flex flex-wrap items-center justify-between gap-4 transition-all";
+        heroTag.innerHTML = "🎉 Jadwal Liburan Selesai Disusun!";
+        heroTag.className = "px-3 py-1 rounded-full bg-white/20 text-white font-bold text-[11px] backdrop-blur uppercase tracking-wider";
+        heroTitle.textContent = "Rencana Perjalanan Wisata Kota Batu";
+        heroDesc.textContent = "Lengkap dengan jeda makan siang & malam, estimasi parkir riil, dan rute navigasi!";
+        
+        if (printBtn) {
+          printBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          printBtn.onclick = triggerPrintPDF;
+        }
+      }
+
+      // Deteksi & Klasifikasi Destinasi yang Gugur (Skipped by Precondition)
+      const skippedGoals = (targetGoals || []).filter(g => !finalState.visited.has(g));
+      
+      if (skippedGoals.length > 0) {
+        const skippedBudget = [];
+        const skippedTime = [];
+
+        skippedGoals.forEach(g => {
+          const d = DESTINATIONS[g];
+          const price = isWeekend ? d.price_weekend : d.price_weekday;
+          const costReq = price + (d.isAttraction ? parkFeePerSpot : 0);
+          if (finalState.budget < costReq) {
+            skippedBudget.push({ id: g, name: d.name, price: price, park: (d.isAttraction ? parkFeePerSpot : 0), req: costReq });
+          } else {
+            skippedTime.push({ id: g, name: d.name, close: d.close });
+          }
+        });
+
+        // 1. Kartu Peringatan Evaluasi STRIPS
+        const warnCard = document.createElement('div');
+        warnCard.className = "mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs shadow-sm space-y-2.5";
+        
+        let detailsHtml = "";
+        if (skippedBudget.length > 0) {
+          const bList = skippedBudget.map(x => "<strong>" + x.name + "</strong> (butuh tiket + parkir Rp " + x.req.toLocaleString('id-ID') + ")").join(', ');
+          detailsHtml += '<p class="leading-relaxed"><i class="fa-solid fa-coins text-amber-600 mr-1.5"></i><strong>Kendala Anggaran:</strong> ' + bList + ' tidak dapat dikunjungi karena uang saku tersisa Rp ' + finalState.budget.toLocaleString('id-ID') + '.</p>';
+        }
+        if (skippedTime.length > 0) {
+          const tList = skippedTime.map(x => "<strong>" + x.name + "</strong>").join(', ');
+          detailsHtml += '<p class="leading-relaxed"><i class="fa-solid fa-clock text-amber-600 mr-1.5"></i><strong>Kendala Waktu Operasional:</strong> ' + tList + ' tidak dapat dijangkau karena jam buka/tutup destinasi atau batas waktu harian kepulangan telah tercapai.</p>';
+        }
+
+        warnCard.innerHTML = `
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
+            <strong class="font-bold text-amber-950 text-xs">Catatan Evaluasi STRIPS (` + skippedGoals.length + ` Destinasi Digugurkan):</strong>
+          </div>
+          ` + detailsHtml + `
+          <div class="pt-1 border-t border-amber-200/60 text-[11px] text-amber-800 leading-relaxed">
+            <em>Sesuai teori formal AI Planning STRIPS:</em> Jika Precondition bernilai False, operator aksi otomatis di-prune (digugurkan) agar rencana perjalanan tetap valid dan uang saku tidak minus.
+          </div>
+        `;
+        timelineContainer.appendChild(warnCard);
+
+        // 2. MODUL REKOMENDASI CERDAS DESTINASI RAMAH KANTONG (Goal Relaxation)
+        // Cari tempat wisata yang BELUM dikunjungi dan terjangkau sisa uang saku (atau total uang saku)
+        const budgetPool = finalState.budget > 0 ? finalState.budget : initialBudget;
+        const affordableRecommendations = Object.keys(DESTINATIONS)
+          .filter(k => {
+            const d = DESTINATIONS[k];
+            if (!d.isAttraction || finalState.visited.has(k)) return false;
+            const price = isWeekend ? d.price_weekend : d.price_weekday;
+            const totalReq = price + parkFeePerSpot;
+            return totalReq <= budgetPool;
+          })
+          .slice(0, 3); // Ambil 3 rekomendasi terbaik
+
+        if (affordableRecommendations.length > 0) {
+          const recCard = document.createElement('div');
+          recCard.className = "mb-4 p-4 rounded-2xl bg-sky-50 border border-sky-200 text-sky-900 text-xs shadow-sm space-y-3";
+          
+          let recListHtml = affordableRecommendations.map(k => {
+            const d = DESTINATIONS[k];
+            const price = isWeekend ? d.price_weekend : d.price_weekday;
+            const priceLabel = price === 0 ? "Gratis" : "Tiket Rp " + price.toLocaleString('id-ID');
+            return `
+              <div class="p-2.5 rounded-xl bg-white border border-sky-100 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xs">
+                    <i class="fa-solid ` + d.icon + `"></i>
+                  </span>
+                  <div>
+                    <h5 class="font-bold text-slate-900 text-xs">` + d.name + `</h5>
+                    <p class="text-[11px] text-slate-500">` + priceLabel + ` • ` + d.catLabel + `</p>
+                  </div>
+                </div>
+                <button onclick="addRecommendationAndReplan('` + k + `')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-sm transition flex items-center gap-1.5 flex-shrink-0">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                  <span>Pilih Tempat Ini</span>
+                </button>
+              </div>
+            `;
+          }).join('');
+
+          recCard.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-wand-magic-sparkles text-sky-600"></i>
+                <strong class="font-bold text-sky-950 text-xs">Rekomendasi Alternatif Ramah Kantong (Dynamic Goal Relaxation):</strong>
+              </div>
+              <span class="text-[10px] bg-sky-200/60 text-sky-800 font-bold px-2 py-0.5 rounded-full">Muat di Budget</span>
+            </div>
+            <p class="text-[11px] text-sky-800 leading-relaxed">
+              Karena destinasi sebelumnya terkendala saldo, AI merekomendasikan destinasi populer berikut yang sesuai dengan uang saku kamu:
+            </p>
+            <div class="space-y-2">
+              ` + recListHtml + `
+            </div>
+          `;
+          timelineContainer.appendChild(recCard);
+        }
+      }
+
+      // 3. REKOMENDASI PENGISI WAKTU LUANG (IDLE TIME OPPORTUNITY SEBELUM KEPULANGAN)
+      // Dipicu jika agenda selesai lebih awal dan tersisa waktu santai >= 60 menit sebelum batas jam pulang
+      if (visitedCount > 0 && plannerData.freeTimeMins >= 60) {
+        const freeH = Math.floor(plannerData.freeTimeMins / 60);
+        const freeM = plannerData.freeTimeMins % 60;
+        const freeTimeStr = freeH > 0 ? (freeM > 0 ? `${freeH} jam ${freeM} menit` : `${freeH} jam`) : `${freeM} menit`;
+        
+        // Cari tempat wisata malam/kuliner/belanja yang belum dikunjungi dan buka pada rentang waktu ini
+        const leisureRecs = Object.keys(DESTINATIONS)
+          .filter(k => {
+            const d = DESTINATIONS[k];
+            if (!d.isAttraction || finalState.visited.has(k)) return false;
+            // Harus buka sampai malam (close >= 1260 atau 21:00)
+            if (d.close < 1260) return false;
+            const price = isWeekend ? d.price_weekend : d.price_weekday;
+            const totalReq = price + parkFeePerSpot;
+            return totalReq <= finalState.budget;
+          })
+          .slice(0, 3);
+
+        const idleCard = document.createElement('div');
+        idleCard.className = "mb-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs shadow-sm space-y-3";
+
+        let idleListHtml = "";
+        if (leisureRecs.length > 0) {
+          idleListHtml = leisureRecs.map(k => {
+            const d = DESTINATIONS[k];
+            const price = isWeekend ? d.price_weekend : d.price_weekday;
+            const priceLabel = price === 0 ? "Gratis Tiket" : "Tiket Rp " + price.toLocaleString('id-ID');
+            return `
+              <div class="p-2.5 rounded-xl bg-white border border-indigo-100 flex items-center justify-between gap-3 shadow-xs">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs flex-shrink-0">
+                    <i class="fa-solid ` + d.icon + `"></i>
+                  </span>
+                  <div>
+                    <h5 class="font-bold text-slate-900 text-xs">` + d.name + `</h5>
+                    <p class="text-[11px] text-slate-500">` + priceLabel + ` • Buka s.d ` + minToTimeStr(d.close) + ` WIB • ` + d.catLabel + `</p>
+                  </div>
+                </div>
+                <button onclick="addRecommendationAndReplan('` + k + `')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-sm transition flex items-center gap-1.5 flex-shrink-0">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                  <span>Tambahkan</span>
+                </button>
+              </div>
+            `;
+          }).join('');
+        } else {
+          idleListHtml = `
+            <div class="p-3 rounded-xl bg-white/80 border border-indigo-100 text-[11px] text-indigo-900 leading-relaxed">
+              <i class="fa-solid fa-check text-emerald-600 mr-1.5"></i>
+              Seluruh destinasi malam Kota Batu telah masuk dalam jadwalmu! Kamu bisa memanfaatkan sisa waktu santai ini untuk istirahat di hotel atau nongkrong santai di sekitar penginapan.
+            </div>
+          `;
+        }
+
+        idleCard.innerHTML = `
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-moon text-indigo-600 text-sm"></i>
+              <strong class="font-bold text-indigo-950 text-xs">Agenda Selesai Lebih Awal (Tersisa Waktu Luang ` + freeTimeStr + `):</strong>
+            </div>
+            <span class="text-[10px] bg-indigo-200/70 text-indigo-900 font-bold px-2.5 py-0.5 rounded-full">Batas Jam ` + minToTimeStr(plannerData.maxEndMins) + ` WIB</span>
+          </div>
+          <p class="text-[11px] text-indigo-800 leading-relaxed">
+            Seluruh destinasi pilihanmu selesai dikunjungi pada pukul <strong>` + minToTimeStr(finalState.time) + ` WIB</strong>. Masih ada waktu luang santai sebelum batas kepulangan <strong>` + minToTimeStr(plannerData.maxEndMins) + ` WIB</strong>. Ingin menambahkan agenda santai atau kuliner malam sebelum beristirahat?
+          </p>
+          <div class="space-y-2">
+            ` + idleListHtml + `
+          </div>
+        `;
+        timelineContainer.appendChild(idleCard);
+      }
+
+      // Update Metrik Ringkasan Keuangan
+      const grandTotalCost = finalState.ticketCost + finalState.mealCost + finalState.parkingCost;
+      document.getElementById('resTotalTicket').textContent = "Rp " + finalState.ticketCost.toLocaleString('id-ID');
+      document.getElementById('resTicketRateType').textContent = isWeekend ? "Tarif Weekend (Sabtu-Minggu)" : "Tarif Reguler (Weekday)";
+      
+      document.getElementById('resMealPark').textContent = "Rp " + (finalState.mealCost + finalState.parkingCost).toLocaleString('id-ID');
+      document.getElementById('resMealParkSub').textContent = "Makan: Rp " + finalState.mealCost.toLocaleString('id-ID') + " | Parkir " + vehicleType;
+
+      document.getElementById('resGrandTotal').textContent = "Rp " + grandTotalCost.toLocaleString('id-ID');
+      document.getElementById('resRemainingBudget').textContent = "Rp " + finalState.budget.toLocaleString('id-ID');
+      
+      const statusBadge = document.getElementById('resBudgetStatus');
+      if (visitedCount === 0) {
+        statusBadge.className = "text-[10px] text-amber-700 font-bold";
+        statusBadge.textContent = "Anggaran belum cukup";
+      } else if (finalState.budget < 0) {
+        statusBadge.className = "text-[10px] text-rose-600 font-bold";
+        statusBadge.textContent = "Anggaran terlampaui";
+      } else {
+        statusBadge.className = "text-[10px] text-emerald-600 font-bold";
+        statusBadge.textContent = "Aman terkendali";
+      }
+
+      document.getElementById('stepCountBadge').textContent = steps.length + " Langkah Terjadwal";
+
+      // Jika 0 destinasi dikunjungi dan tidak ada perjalanan sama sekali (misal start dari hotel)
+      if (steps.length === 0) {
+        const emptyCard = document.createElement('div');
+        emptyCard.className = "p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-4 shadow-sm";
+        emptyCard.innerHTML = `
+          <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl shadow-sm">
+            <i class="fa-solid fa-route"></i>
+          </div>
+          <div class="space-y-1">
+            <h4 class="font-extrabold text-slate-800 text-sm">Belum Ada Agenda yang Terjadwal</h4>
+            <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Seluruh tempat wisata yang dipilih terbentur Precondition STRIPS (uang saku tidak mencukupi untuk tiket dan parkir).
+            </p>
+          </div>
+          <div class="pt-2 flex justify-center gap-3">
+            <button onclick="goToStep(1)" class="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition shadow-sm">
+              <i class="fa-solid fa-wallet mr-1.5"></i> Atur Ulang Anggaran
+            </button>
+            <button onclick="goToStep(2)" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+              <i class="fa-solid fa-map-location-dot mr-1.5"></i> Pilih Wisata Lain
+            </button>
+          </div>
+        `;
+        timelineContainer.appendChild(emptyCard);
+        return;
+      }
+
+      // Render Setiap Baris Jadwal dengan Badge Operator Formal STRIPS
+      steps.forEach(s => {
+        let badgeColor = "bg-sky-100 text-sky-800";
+        let icon = "fa-shoe-prints";
+        let cardBorder = "border-slate-200";
+
+        // Tentukan Nama Formal Operator STRIPS untuk Ujian Dosen
+        let stripsOpName = "ACTION";
+        if (s.type === 'TRAVEL') {
+          badgeColor = "bg-amber-100 text-amber-800";
+          icon = "fa-car";
+          cardBorder = "border-amber-200";
+          stripsOpName = "OP: TRAVEL(" + (s.locKey || 'Hotel') + ")";
+        } else if (s.type === 'BUY_TICKET') {
+          badgeColor = "bg-rose-100 text-rose-800";
+          icon = "fa-ticket";
+          cardBorder = "border-rose-200";
+          stripsOpName = "OP: BUY_TICKET(" + s.locKey + ")";
+        } else if (s.type === 'VISIT') {
+          badgeColor = "bg-emerald-100 text-emerald-800";
+          icon = "fa-camera";
+          cardBorder = "border-emerald-200";
+          stripsOpName = "OP: VISIT(" + s.locKey + ")";
+        } else if (s.type === 'MEAL') {
+          badgeColor = "bg-orange-100 text-orange-800";
+          icon = "fa-utensils";
+          cardBorder = "border-orange-200";
+          stripsOpName = s.title.includes('Malam') ? "OP: EAT(DINNER)" : "OP: EAT(LUNCH)";
+        } else if (s.type === 'PARK') {
+          badgeColor = "bg-teal-100 text-teal-800";
+          icon = "fa-square-parking";
+          cardBorder = "border-teal-200";
+          stripsOpName = "OP: PARK(" + vehicleType.toUpperCase() + ")";
+        } else if (s.type === 'WAIT') {
+          badgeColor = "bg-purple-100 text-purple-800";
+          icon = "fa-mug-hot";
+          cardBorder = "border-purple-200";
+          stripsOpName = "OP: WAIT(" + s.locKey + ")";
+        }
+
+        const costDisplay = s.cost > 0 ? '<span class="text-[10px] font-mono font-bold text-emerald-700 mt-0.5 block">Rp ' + s.cost.toLocaleString('id-ID') + '</span>' : '';
+        const typeLabel = s.type === 'TRAVEL' ? 'Perjalanan' : s.type === 'BUY_TICKET' ? 'Beli Tiket' : s.type === 'VISIT' ? 'Di Wahana' : s.type === 'MEAL' ? 'Santap Kuliner' : s.type === 'PARK' ? 'Retribusi Parkir' : 'Santai Sejenak';
+
+        const item = document.createElement('div');
+        item.className = "p-4 rounded-2xl bg-white border " + cardBorder + " shadow-sm space-y-2.5";
+        item.innerHTML = `
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="w-6 h-6 rounded-full bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center">
+                ` + s.no + `
+              </span>
+              <span class="px-2.5 py-0.5 rounded-md text-[11px] font-bold ` + badgeColor + ` inline-flex items-center gap-1.5">
+                <i class="fa-solid ` + icon + `"></i>
+                ` + typeLabel + `
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                ` + stripsOpName + `
+              </span>
+              <h4 class="font-bold text-slate-900 text-xs md:text-sm">` + s.title + `</h4>
+            </div>
+            <div class="text-right">
+              <span class="font-mono text-xs font-bold text-sky-700 bg-sky-50 px-2 py-1 rounded-lg block">
+                ` + s.start + ` - ` + s.end + `
+              </span>
+              ` + costDisplay + `
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-600 ml-8 leading-relaxed">` + s.desc + `</p>
+
+          <div class="ml-8 pt-1">
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-start gap-2">
+              <i class="fa-solid fa-lightbulb text-amber-500 mt-0.5 text-xs flex-shrink-0"></i>
+              <div>
+                <strong class="text-slate-800">Alasan AI (STRIPS):</strong> ` + s.reason + `
+              </div>
+            </div>
+          </div>
+        `;
+        timelineContainer.appendChild(item);
+      });
+    }
+
+    // Helper untuk Tombol Rekomendasi: Centang otomatis dan rencanakan ulang seketika
+    function addRecommendationAndReplan(destKey) {
+      selectedAttractions.add(destKey);
+      renderAttractionCards();
+      runPlannerAndShowStep3();
+    }
+
+    // =========================================================================
+    // 10. RENDER VOUCHER RESMI KHUSUS CETAK / PDF LENGKAP
+    // =========================================================================
+    function renderPrintVoucher(plannerData, initialBudget, startMins, startLoc, endMins, dateInfo, vehicleType) {
+      const { steps, finalState } = plannerData;
+      const grandTotalCost = finalState.ticketCost + finalState.mealCost + finalState.parkingCost;
+
+      const now = new Date();
+      document.getElementById('printDateStr').textContent = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      document.getElementById('pvDateDay').textContent = dateInfo.formatted || 'Tanggal Terpilih';
+      document.getElementById('pvDayBadge').textContent = dateInfo.isWeekend ? 'Weekend (Tarif Libur)' : 'Weekday (Tarif Reguler)';
+      document.getElementById('pvStartLoc').textContent = DESTINATIONS[startLoc].name;
+      document.getElementById('pvVehicleText').textContent = vehicleType === 'motor' ? 'Sepeda Motor (Lincah)' : 'Mobil Pribadi / Keluarga';
+      document.getElementById('pvTimeRange').textContent = `${minToTimeStr(startMins)} - ${minToTimeStr(finalState.time)} WIB`;
+      document.getElementById('pvDurationText').textContent = `Total ${(finalState.time - startMins)} menit kegiatan`;
+      document.getElementById('pvTotalCost').textContent = `Rp ${grandTotalCost.toLocaleString('id-ID')}`;
+
+      document.getElementById('pvSubTicket').textContent = `Rp ${finalState.ticketCost.toLocaleString('id-ID')}`;
+      document.getElementById('pvSubMeal').textContent = `Rp ${finalState.mealCost.toLocaleString('id-ID')}`;
+      document.getElementById('pvSubPark').textContent = `Rp ${finalState.parkingCost.toLocaleString('id-ID')}`;
+
+      const tbody = document.getElementById('printTableBody');
+      tbody.innerHTML = '';
+
+      steps.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/50";
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 text-center font-bold text-slate-700">${s.no}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-sky-800 text-[11px] whitespace-nowrap">${s.start} - ${s.end}</td>
+          <td class="py-2.5 px-3">
+            <strong class="text-slate-900 block">${s.title}</strong>
+            <span class="text-slate-500 text-[11px] block leading-tight mt-0.5">${s.desc}</span>
+          </td>
+          <td class="py-2.5 px-3 text-right font-mono font-semibold text-slate-700 whitespace-nowrap">
+            ${s.cost > 0 ? 'Rp ' + s.cost.toLocaleString('id-ID') : '-'}
+            ${s.costCategory ? `<span class="text-[9px] text-slate-400 block">${s.costCategory}</span>` : ''}
+          </td>
+          <td class="py-2.5 px-3 text-slate-600 text-[11px] leading-tight">
+            ${s.reason}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function triggerPrintPDF() {
+      window.print();
+    }
+
+    // =========================================================================
+    // 11. PETA LEAFLET DENGAN ESRI STREET MAP (BEBAS API KEY & JERNIH)
+    // =========================================================================
+    let map = null;
+    let markersLayer = null;
+    let routePolyline = null;
+
+    function initMap() {
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([-7.8750, 112.5250], 12);
+
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18,
+        attribution: 'Esri, HERE, Garmin, USGS'
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+    }
+
+    function updateMapWithRoute(routeLocs) {
+      if (!map || !markersLayer) return;
+      markersLayer.clearLayers();
+      if (routePolyline) map.removeLayer(routePolyline);
+
+      const latlngs = [];
+      const orderMap = {};
+      routeLocs.forEach((locId, idx) => {
+        if (!orderMap[locId]) orderMap[locId] = idx + 1;
+      });
+
+      for (const [key, d] of Object.entries(DESTINATIONS)) {
+        const orderNum = orderMap[key];
+        const isVisited = Boolean(orderNum);
+        const { isWeekend } = getSelectedDateInfo();
+        const effectivePrice = isWeekend ? d.price_weekend : d.price_weekday;
+        const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.gmapsQuery || d.name)}`;
+
+        let markerHtml = '';
+        if (isVisited) {
+          markerHtml = `
+            <div style="background-color: #0284c7; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 13px;">
+              ${orderNum}
+            </div>
+          `;
+        } else {
+          markerHtml = `
+            <div style="background-color: #94a3b8; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; opacity: 0.6;"></div>
+          `;
+        }
+
+        const icon = L.divIcon({
+          className: 'map-pin',
+          html: markerHtml,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([d.lat, d.lng], { icon }).addTo(markersLayer);
+        marker.bindPopup(`
+          <div style="font-size: 12px; padding: 2px;">
+            <strong style="color: #0284c7; font-size: 13px;">${d.name}</strong><br>
+            <span>Jam Buka: ${minToTimeStr(d.open)} - ${minToTimeStr(d.close)} WIB</span><br>
+            <span>Tiket: ${effectivePrice === 0 ? 'Gratis' : 'Rp ' + effectivePrice.toLocaleString('id-ID')}</span>
+            ${isVisited ? `<br><strong style="color: #10b981;">Urutan Perjalanan Ke-${orderNum}</strong>` : ''}
+            <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #e2e8f0;">
+              <a href="${gmapsLink}" target="_blank" style="color: #2563eb; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                📍 Buka di Google Maps ↗
+              </a>
+            </div>
+          </div>
+        `);
+      }
+
+      routeLocs.forEach(locId => {
+        if (DESTINATIONS[locId]) {
+          latlngs.push([DESTINATIONS[locId].lat, DESTINATIONS[locId].lng]);
+        }
+      });
+
+      if (latlngs.length > 1) {
+        routePolyline = L.polyline(latlngs, {
+          color: '#0284c7',
+          weight: 4,
+          opacity: 0.85,
+          dashArray: '6, 8'
+        }).addTo(map);
+        map.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
+      }
+    }
+
+    // Modal Controls
+    function openAIExplainerModal() { document.getElementById('aiExplainerModal').classList.remove('hidden'); }
+    function closeAIExplainerModal() { document.getElementById('aiExplainerModal').classList.add('hidden'); }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      document.getElementById('visitDateInput').value = `${yyyy}-${mm}-${dd}`;
+      
+      onDateChanged();
+      onCustomBudgetInput(document.getElementById('budgetInput').value);
+      initMap();
+    });
+  </script>
+</body>
+</html>

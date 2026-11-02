@@ -1,0 +1,10 @@
+# Core Dependencies
+# The core STRIPS planner runs on standard Python 3.10+ stdlib (zero-dependency).
+# The optional test suite and local web server use Python stdlib:
+# - unittest (built-in)
+# - http.server & urllib (built-in)
+# - json, csv, dataclasses, heapq (built-in)
+
+# Optional dependencies for extended data analysis & development:
+pandas>=2.0.0
+pytest>=7.0.0
